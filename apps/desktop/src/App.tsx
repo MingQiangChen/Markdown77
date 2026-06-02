@@ -64,6 +64,34 @@ const demoFiles = [
   }
 ];
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function normalizeWikiTarget(target: string) {
+  const trimmed = target.trim();
+  const withExtension = trimmed.toLowerCase().endsWith(".md") ? trimmed : `${trimmed}.md`;
+  return withExtension.replace(/\\/g, "/");
+}
+
+function renderWikiLinks(markdownText: string) {
+  const escaped = markdownText.replace(/\[\[([^\]]+)\]\]/g, (_match, rawValue: string) => {
+    const [rawTarget, rawLabel] = rawValue.split("|");
+    const target = normalizeWikiTarget(rawTarget);
+    const label = (rawLabel ?? rawTarget).trim();
+
+    return `<button class="wiki-link" type="button" data-wiki-target="${escapeHtml(
+      target
+    )}">${escapeHtml(label)}</button>`;
+  });
+
+  return md.render(escaped);
+}
+
 export function App() {
   const [vault, setVault] = useState<VaultInfo | null>(null);
   const [files, setFiles] = useState<VaultFile[]>(demoFiles);
@@ -77,7 +105,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
 
   const normalizedQuery = query.trim();
-  const rendered = useMemo(() => md.render(content), [content]);
+  const rendered = useMemo(() => renderWikiLinks(content), [content]);
   const visibleFiles = normalizedQuery
     ? files.filter((file) => file.path.toLowerCase().includes(normalizedQuery.toLowerCase()))
     : files;
@@ -243,6 +271,34 @@ export function App() {
     }
   }
 
+  async function openWikiLink(target: string) {
+    if (!vault || !window.markdown77) {
+      setError("请先打开一个 Vault。");
+      return;
+    }
+
+    const existingFile = files.find(
+      (file) => file.path.toLowerCase() === target.toLowerCase()
+    );
+
+    if (existingFile) {
+      await openFile(vault, existingFile.path);
+      return;
+    }
+
+    const confirmed = window.confirm(`${target} 不存在。是否创建这个笔记？`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    const title = target.replace(/\.md$/i, "").split(/[\\/]/).pop() || "新笔记";
+    const newFile = await window.markdown77.createFile(vault.path, target, `# ${title}\n\n`);
+    await refreshFiles();
+    await openFile(vault, newFile.path);
+    setSaveState("已创建链接笔记");
+  }
+
   useEffect(() => {
     if (!vault || !activeFile || !window.markdown77) {
       return;
@@ -286,6 +342,28 @@ export function App() {
       window.clearTimeout(timeout);
     };
   }, [normalizedQuery, vault]);
+
+  function handlePreviewClick(event: React.MouseEvent<HTMLElement>) {
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const wikiButton = target.closest<HTMLButtonElement>("[data-wiki-target]");
+
+    if (!wikiButton) {
+      return;
+    }
+
+    const wikiTarget = wikiButton.dataset.wikiTarget;
+
+    if (!wikiTarget) {
+      return;
+    }
+
+    void openWikiLink(wikiTarget);
+  }
 
   return (
     <div className="app-shell">
@@ -459,6 +537,7 @@ export function App() {
             </div>
             <article
               className="preview"
+              onClick={handlePreviewClick}
               dangerouslySetInnerHTML={{ __html: rendered }}
             />
           </div>

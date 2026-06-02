@@ -429,6 +429,22 @@ button:disabled {
     "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
+.preview .wiki-link {
+  display: inline;
+  border: 0;
+  border-bottom: 1px solid #7bb4ad;
+  border-radius: 0;
+  padding: 0 1px;
+  background: transparent;
+  color: #12645c;
+  cursor: pointer;
+  font: inherit;
+}
+
+.preview .wiki-link:hover {
+  background: #e0f1ee;
+}
+
 .preview pre {
   overflow: auto;
   border-radius: 8px;
