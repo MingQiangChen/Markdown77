@@ -277,12 +277,61 @@ button:disabled {
   min-height: 0;
 }
 
+.inspector-panels {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  border-top: 1px solid #d9dde3;
+  background: #ffffff;
+}
+
+.outline-panel,
 .backlinks-panel {
   display: grid;
   gap: 8px;
-  border-top: 1px solid #d9dde3;
   padding: 10px 16px;
   background: #ffffff;
+}
+
+.outline-panel {
+  border-right: 1px solid #d9dde3;
+}
+
+.outline-list {
+  display: flex;
+  max-height: 132px;
+  flex-direction: column;
+  gap: 3px;
+  overflow: auto;
+}
+
+.outline-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #39414d;
+  text-align: left;
+  cursor: pointer;
+}
+
+.outline-item:hover {
+  background: #eef2f5;
+}
+
+.outline-item svg {
+  flex: 0 0 auto;
+  color: #67717f;
+}
+
+.outline-item span {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .backlinks-list {
@@ -526,6 +575,15 @@ button:disabled {
   }
 
   .editor-surface {
+    border-right: 0;
+    border-bottom: 1px solid #d9dde3;
+  }
+
+  .inspector-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .outline-panel {
     border-right: 0;
     border-bottom: 1px solid #d9dde3;
   }

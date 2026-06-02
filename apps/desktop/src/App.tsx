@@ -1,5 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type EditorView } from "@uiw/react-codemirror";
 import MarkdownIt from "markdown-it";
 import {
   AlertCircle,
@@ -9,6 +9,7 @@ import {
   FilePlus2,
   ChevronRight,
   ChevronDown,
+  ListTree,
   Pencil,
   RefreshCcw,
   Save,
@@ -24,6 +25,13 @@ type TreeNode = {
   name: string;
   type: "folder" | "file";
   children: TreeNode[];
+};
+
+type OutlineItem = {
+  id: string;
+  level: number;
+  title: string;
+  line: number;
 };
 
 const md = new MarkdownIt({
@@ -171,6 +179,32 @@ function buildFileTree(files: VaultFile[], folders: VaultFolder[]) {
   return root.children;
 }
 
+function extractOutline(markdownText: string): OutlineItem[] {
+  return markdownText
+    .split("\n")
+    .map((line, index) => {
+      const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+
+      if (!match) {
+        return null;
+      }
+
+      const title = match[2].replace(/\s+#+$/, "").trim();
+
+      if (!title) {
+        return null;
+      }
+
+      return {
+        id: `${index + 1}-${title}`,
+        level: match[1].length,
+        title,
+        line: index + 1
+      };
+    })
+    .filter((item): item is OutlineItem => Boolean(item));
+}
+
 export function App() {
   const [vault, setVault] = useState<VaultInfo | null>(null);
   const [files, setFiles] = useState<VaultFile[]>(demoFiles);
@@ -186,11 +220,13 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const activeFileRef = useRef(activeFile);
   const contentRef = useRef(content);
+  const editorViewRef = useRef<EditorView | null>(null);
   const lastSavedContentRef = useRef(content);
   const isLoadingFileRef = useRef(false);
 
   const normalizedQuery = query.trim();
   const rendered = useMemo(() => renderWikiLinks(content), [content]);
+  const outline = useMemo(() => extractOutline(content), [content]);
   const visibleFiles = useMemo(
     () =>
       normalizedQuery
@@ -514,6 +550,21 @@ export function App() {
     setSaveState("已创建链接笔记");
   }
 
+  function jumpToOutlineItem(item: OutlineItem) {
+    const view = editorViewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    const line = view.state.doc.line(Math.min(item.line, view.state.doc.lines));
+    view.dispatch({
+      selection: { anchor: line.from },
+      scrollIntoView: true
+    });
+    view.focus();
+  }
+
   useEffect(() => {
     activeFileRef.current = activeFile;
   }, [activeFile]);
@@ -770,6 +821,9 @@ export function App() {
                 height="100%"
                 extensions={[markdown()]}
                 onChange={setContent}
+                onCreateEditor={(view) => {
+                  editorViewRef.current = view;
+                }}
                 basicSetup={{
                   lineNumbers: true,
                   foldGutter: true,
@@ -785,33 +839,60 @@ export function App() {
           </div>
 
           {vault && activeFile && (
-            <section className="backlinks-panel">
-              <div className="section-title">
-                <span>反向链接</span>
-                <small>{backlinks.length} 个来源</small>
-              </div>
-              {backlinks.length > 0 ? (
-                <div className="backlinks-list">
-                  {backlinks.map((backlink) => (
-                    <button
-                      className="backlink-item"
-                      key={backlink.sourcePath}
-                      type="button"
-                      onClick={() => {
-                        if (vault) {
-                          void openFile(vault, backlink.sourcePath);
-                        }
-                      }}
-                    >
-                      <strong>{backlink.sourcePath}</strong>
-                      <span>{backlink.snippet}</span>
-                    </button>
-                  ))}
+            <div className="inspector-panels">
+              <section className="outline-panel">
+                <div className="section-title">
+                  <span>大纲</span>
+                  <small>{outline.length} 个标题</small>
                 </div>
-              ) : (
-                <p className="empty-hint">还没有其他笔记链接到当前笔记。</p>
-              )}
-            </section>
+                {outline.length > 0 ? (
+                  <div className="outline-list">
+                    {outline.map((item) => (
+                      <button
+                        className="outline-item"
+                        key={item.id}
+                        style={{ paddingLeft: 8 + (item.level - 1) * 14 }}
+                        type="button"
+                        onClick={() => jumpToOutlineItem(item)}
+                      >
+                        <ListTree size={14} />
+                        <span>{item.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-hint">当前笔记还没有标题。</p>
+                )}
+              </section>
+
+              <section className="backlinks-panel">
+                <div className="section-title">
+                  <span>反向链接</span>
+                  <small>{backlinks.length} 个来源</small>
+                </div>
+                {backlinks.length > 0 ? (
+                  <div className="backlinks-list">
+                    {backlinks.map((backlink) => (
+                      <button
+                        className="backlink-item"
+                        key={backlink.sourcePath}
+                        type="button"
+                        onClick={() => {
+                          if (vault) {
+                            void openFile(vault, backlink.sourcePath);
+                          }
+                        }}
+                      >
+                        <strong>{backlink.sourcePath}</strong>
+                        <span>{backlink.snippet}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-hint">还没有其他笔记链接到当前笔记。</p>
+                )}
+              </section>
+            </div>
           )}
         </section>
       </main>
