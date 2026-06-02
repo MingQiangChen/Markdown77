@@ -1035,7 +1035,7 @@ export function App() {
     context.stroke();
   }
 
-  function insertDrawing() {
+  async function insertDrawing() {
     const canvas = canvasRef.current;
 
     if (!canvas) {
@@ -1044,8 +1044,21 @@ export function App() {
 
     const dataUrl = canvas.toDataURL("image/png");
 
-    // MVP stores annotations inline so they sync with the Markdown file itself.
-    insertMarkdownSnippet(`\n![手写绘图标注](${dataUrl})\n`);
+    if (vault && window.markdown77) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const asset = await window.markdown77.saveDrawing(
+        vault.path,
+        `drawing-${timestamp}`,
+        dataUrl
+      );
+
+      insertMarkdownSnippet(`\n![手写绘图标注](${asset.path})\n`);
+      await refreshFiles();
+    } else {
+      // Browser demo mode has no filesystem bridge, so inline data keeps the drawing visible.
+      insertMarkdownSnippet(`\n![手写绘图标注](${dataUrl})\n`);
+    }
+
     setIsDrawingOpen(false);
   }
 
@@ -1456,7 +1469,13 @@ export function App() {
                   <button className="icon-button" type="button" onClick={clearDrawingCanvas}>
                     清空
                   </button>
-                  <button className="icon-button primary" type="button" onClick={insertDrawing}>
+                  <button
+                    className="icon-button primary"
+                    type="button"
+                    onClick={() => {
+                      void insertDrawing();
+                    }}
+                  >
                     插入
                   </button>
                   <button

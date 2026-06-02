@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld("markdown77", {
     ipcRenderer.invoke("vault:writeFile", vaultPath, relativePath, content),
   createFile: (vaultPath: string, preferredRelativePath: string, content: string) =>
     ipcRenderer.invoke("vault:createFile", vaultPath, preferredRelativePath, content),
+  saveDrawing: (vaultPath: string, preferredName: string, dataUrl: string) =>
+    ipcRenderer.invoke("vault:saveDrawing", vaultPath, preferredName, dataUrl),
   createFolder: (vaultPath: string, folderName: string) =>
     ipcRenderer.invoke("vault:createFolder", vaultPath, folderName),
   renameFile: (vaultPath: string, currentRelativePath: string, nextRelativePath: string) =>

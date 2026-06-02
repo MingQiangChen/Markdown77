@@ -14,6 +14,11 @@ export type VaultContents = {
   folders: VaultFolder[];
 };
 
+export type SavedAsset = {
+  path: string;
+  name: string;
+};
+
 export type SearchResult = {
   path: string;
   title: string;
@@ -77,6 +82,11 @@ declare global {
         preferredRelativePath: string,
         content: string
       ) => Promise<VaultFile>;
+      saveDrawing: (
+        vaultPath: string,
+        preferredName: string,
+        dataUrl: string
+      ) => Promise<SavedAsset>;
       createFolder: (vaultPath: string, folderName: string) => Promise<VaultFolder>;
       renameFile: (
         vaultPath: string,

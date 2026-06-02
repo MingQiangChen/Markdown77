@@ -189,6 +189,16 @@ async function getAvailablePath(vaultPath: string, preferredRelativePath: string
   }
 }
 
+function parsePngDataUrl(dataUrl: string) {
+  const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+
+  if (!match) {
+    throw new Error("只支持 PNG 格式的绘图附件。");
+  }
+
+  return Buffer.from(match[1], "base64");
+}
+
 async function assertPathExists(filePath: string) {
   await fs.access(filePath);
 }
@@ -560,6 +570,30 @@ ipcMain.handle(
       path: relativePath,
       name: path.basename(relativePath),
       modifiedAt: Date.now()
+    };
+  }
+);
+
+ipcMain.handle(
+  "vault:saveDrawing",
+  async (_event, vaultPath: string, preferredName: string, dataUrl: string) => {
+    const safeBaseName = (preferredName.trim() || "drawing")
+      .replace(/\.png$/i, "")
+      .replace(/[^\w\u4e00-\u9fa5-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    const relativePath = await getAvailablePath(
+      vaultPath,
+      path.join("attachments", "drawings", `${safeBaseName || "drawing"}.png`)
+    );
+    const filePath = resolveVaultPath(vaultPath, relativePath);
+    const content = parsePngDataUrl(dataUrl);
+
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content);
+
+    return {
+      path: relativePath.replace(/\\/g, "/"),
+      name: path.basename(relativePath)
     };
   }
 );
