@@ -83,6 +83,8 @@ async function loadVault(vaultPath: string) {
 }
 
 function createWindow() {
+  const preloadPath = path.join(app.getAppPath(), "dist-electron/preload.js");
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -90,7 +92,7 @@ function createWindow() {
     minHeight: 620,
     title: "Markdown77",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
