@@ -28,6 +28,36 @@ type Backlink = {
 
 let mainWindow: BrowserWindow | null = null;
 
+function getSettingsPath() {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+
+async function readSettings(): Promise<{ lastVaultPath?: string }> {
+  try {
+    const settings = await fs.readFile(getSettingsPath(), "utf8");
+    return JSON.parse(settings) as { lastVaultPath?: string };
+  } catch {
+    return {};
+  }
+}
+
+async function writeSettings(settings: { lastVaultPath?: string }) {
+  await fs.mkdir(path.dirname(getSettingsPath()), { recursive: true });
+  await fs.writeFile(getSettingsPath(), JSON.stringify(settings, null, 2), "utf8");
+}
+
+async function loadVault(vaultPath: string) {
+  await assertPathExists(vaultPath);
+  const { files, folders } = await walkVault(vaultPath);
+
+  return {
+    path: vaultPath,
+    name: path.basename(vaultPath),
+    files,
+    folders
+  };
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -187,14 +217,29 @@ ipcMain.handle("vault:open", async () => {
   }
 
   const vaultPath = result.filePaths[0];
-  const { files, folders } = await walkVault(vaultPath);
+  await writeSettings({ lastVaultPath: vaultPath });
 
-  return {
-    path: vaultPath,
-    name: path.basename(vaultPath),
-    files,
-    folders
-  };
+  return loadVault(vaultPath);
+});
+
+ipcMain.handle("settings:getLastVault", async () => {
+  const settings = await readSettings();
+
+  if (!settings.lastVaultPath) {
+    return null;
+  }
+
+  try {
+    return await loadVault(settings.lastVaultPath);
+  } catch {
+    await writeSettings({});
+    return null;
+  }
+});
+
+ipcMain.handle("settings:setLastVault", async (_event, vaultPath: string | null) => {
+  await writeSettings({ lastVaultPath: vaultPath ?? undefined });
+  return true;
 });
 
 ipcMain.handle("vault:listFiles", async (_event, vaultPath: string) => {

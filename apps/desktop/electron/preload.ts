@@ -2,6 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("markdown77", {
   openVault: () => ipcRenderer.invoke("vault:open"),
+  getLastVault: () => ipcRenderer.invoke("settings:getLastVault"),
+  setLastVault: (vaultPath: string | null) =>
+    ipcRenderer.invoke("settings:setLastVault", vaultPath),
   listFiles: (vaultPath: string) => ipcRenderer.invoke("vault:listFiles", vaultPath),
   search: (vaultPath: string, query: string) =>
     ipcRenderer.invoke("vault:search", vaultPath, query),

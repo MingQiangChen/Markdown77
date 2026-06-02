@@ -242,6 +242,22 @@ export function App() {
     await persistContent(activeFileRef.current, contentRef.current);
   }
 
+  async function loadVaultInfo(nextVault: VaultInfo) {
+    setVault(nextVault);
+    setFiles(nextVault.files);
+    setFolders(nextVault.folders);
+    setExpandedFolders(new Set(nextVault.folders.map((folder) => folder.path)));
+    setSaveState("Vault 已打开");
+
+    if (nextVault.files[0]) {
+      await openFile(nextVault, nextVault.files[0].path);
+    } else {
+      setActiveFile("");
+      setContent("# 新 Vault\n\n这个 Vault 里还没有 Markdown 文件。");
+      setBacklinks([]);
+    }
+  }
+
   async function openVault() {
     if (!window.markdown77) {
       setError("请在 Electron 桌面壳中打开 Vault。");
@@ -256,18 +272,7 @@ export function App() {
       return;
     }
 
-    setVault(nextVault);
-    setFiles(nextVault.files);
-    setFolders(nextVault.folders);
-    setExpandedFolders(new Set(nextVault.folders.map((folder) => folder.path)));
-    setSaveState("Vault 已打开");
-
-    if (nextVault.files[0]) {
-      await openFile(nextVault, nextVault.files[0].path);
-    } else {
-      setActiveFile("");
-      setContent("# 新 Vault\n\n这个 Vault 里还没有 Markdown 文件。");
-    }
+    await loadVaultInfo(nextVault);
   }
 
   async function refreshFiles() {
@@ -507,6 +512,39 @@ export function App() {
   useEffect(() => {
     activeFileRef.current = activeFile;
   }, [activeFile]);
+
+  useEffect(() => {
+    if (!window.markdown77) {
+      return;
+    }
+
+    let isActive = true;
+    setSaveState("正在恢复 Vault");
+
+    void window.markdown77
+      .getLastVault()
+      .then((lastVault) => {
+        if (!isActive) {
+          return;
+        }
+
+        if (lastVault) {
+          void loadVaultInfo(lastVault);
+        } else {
+          setSaveState("演示模式");
+        }
+      })
+      .catch((restoreError) => {
+        if (isActive) {
+          setError(restoreError instanceof Error ? restoreError.message : "恢复 Vault 失败。");
+          setSaveState("恢复失败");
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     contentRef.current = content;
