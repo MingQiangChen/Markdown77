@@ -35,6 +35,17 @@ export type TagIndexEntry = {
   }>;
 };
 
+export type GraphData = {
+  nodes: Array<{
+    path: string;
+    title: string;
+  }>;
+  edges: Array<{
+    source: string;
+    target: string;
+  }>;
+};
+
 export type VaultInfo = {
   path: string;
   name: string;
@@ -54,6 +65,7 @@ declare global {
       search: (vaultPath: string, query: string) => Promise<SearchResult[]>;
       getBacklinks: (vaultPath: string, relativePath: string) => Promise<Backlink[]>;
       getTags: (vaultPath: string) => Promise<TagIndexEntry[]>;
+      getGraph: (vaultPath: string) => Promise<GraphData>;
       readFile: (vaultPath: string, relativePath: string) => Promise<string>;
       writeFile: (
         vaultPath: string,

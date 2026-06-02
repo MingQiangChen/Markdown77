@@ -34,6 +34,17 @@ type TagIndexEntry = {
   }>;
 };
 
+type GraphData = {
+  nodes: Array<{
+    path: string;
+    title: string;
+  }>;
+  edges: Array<{
+    source: string;
+    target: string;
+  }>;
+};
+
 type AppSettings = {
   lastVaultPath?: string;
   lastFilePath?: string;
@@ -460,6 +471,64 @@ ipcMain.handle("vault:getTags", async (_event, vaultPath: string) => {
   }
 
   return Array.from(tagMap.values()).sort((a, b) => a.tag.localeCompare(b.tag, "zh-CN"));
+});
+
+ipcMain.handle("vault:getGraph", async (_event, vaultPath: string) => {
+  const { files } = await walkVault(vaultPath);
+  const nodes: GraphData["nodes"] = [];
+  const edges: GraphData["edges"] = [];
+  const targetMap = new Map<string, string>();
+
+  for (const file of files) {
+    const filePath = resolveVaultPath(vaultPath, file.path);
+    const content = await fs.readFile(filePath, "utf8");
+    const title = parseFrontmatterTitle(content) ?? path.basename(file.path, ".md");
+    const normalizedPath = file.path.replace(/\\/g, "/");
+    const parsed = path.parse(normalizedPath);
+
+    nodes.push({
+      path: file.path,
+      title
+    });
+
+    targetMap.set(normalizedPath.toLowerCase(), file.path);
+    targetMap.set(normalizedPath.replace(/\.md$/i, "").toLowerCase(), file.path);
+    targetMap.set(`${parsed.name}.md`.toLowerCase(), file.path);
+    targetMap.set(parsed.name.toLowerCase(), file.path);
+  }
+
+  const edgeKeys = new Set<string>();
+
+  for (const file of files) {
+    const filePath = resolveVaultPath(vaultPath, file.path);
+    const content = await fs.readFile(filePath, "utf8");
+    const matches = content.matchAll(/\[\[([^\]]+)\]\]/g);
+
+    for (const match of matches) {
+      const targetPath = targetMap.get(normalizeLinkTarget(match[1] ?? ""));
+
+      if (!targetPath || targetPath === file.path) {
+        continue;
+      }
+
+      const edgeKey = `${file.path}->${targetPath}`;
+
+      if (edgeKeys.has(edgeKey)) {
+        continue;
+      }
+
+      edgeKeys.add(edgeKey);
+      edges.push({
+        source: file.path,
+        target: targetPath
+      });
+    }
+  }
+
+  return {
+    nodes,
+    edges
+  } satisfies GraphData;
 });
 
 ipcMain.handle("vault:readFile", async (_event, vaultPath: string, relativePath: string) => {

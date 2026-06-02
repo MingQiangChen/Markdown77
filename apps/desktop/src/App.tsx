@@ -8,6 +8,7 @@ import {
   FolderPlus,
   FolderOpen,
   FilePlus2,
+  Network,
   ChevronRight,
   ChevronDown,
   ListTree,
@@ -23,6 +24,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   Backlink,
+  GraphData,
   SearchResult,
   TagIndexEntry,
   VaultFile,
@@ -53,6 +55,14 @@ type FrontmatterInfo = {
   title?: string;
   created?: string;
   updated?: string;
+};
+
+type GraphPoint = {
+  path: string;
+  title: string;
+  x: number;
+  y: number;
+  radius: number;
 };
 
 const md = new MarkdownIt({
@@ -349,6 +359,77 @@ function extractOutline(markdownText: string): OutlineItem[] {
     .filter((item): item is OutlineItem => Boolean(item));
 }
 
+function buildGraphLayout(graph: GraphData, activeFile: string) {
+  const width = 720;
+  const height = 420;
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const ringRadius = Math.min(width, height) * 0.36;
+  const activeInGraph = graph.nodes.some((node) => node.path === activeFile);
+  const degreeMap = new Map<string, number>();
+
+  graph.nodes.forEach((node) => degreeMap.set(node.path, 0));
+  graph.edges.forEach((edge) => {
+    degreeMap.set(edge.source, (degreeMap.get(edge.source) ?? 0) + 1);
+    degreeMap.set(edge.target, (degreeMap.get(edge.target) ?? 0) + 1);
+  });
+
+  const sortedNodes = [...graph.nodes].sort((a, b) => {
+    if (a.path === activeFile) {
+      return -1;
+    }
+
+    if (b.path === activeFile) {
+      return 1;
+    }
+
+    return (degreeMap.get(b.path) ?? 0) - (degreeMap.get(a.path) ?? 0);
+  });
+
+  const points = new Map<string, GraphPoint>();
+
+  sortedNodes.forEach((node, index) => {
+    const isActive = node.path === activeFile;
+
+    if (isActive) {
+      points.set(node.path, {
+        ...node,
+        x: centerX,
+        y: centerY,
+        radius: 18
+      });
+      return;
+    }
+
+    const visibleIndex = activeInGraph ? index - 1 : index;
+    const visibleCount = Math.max(1, sortedNodes.length - (activeInGraph ? 1 : 0));
+    const angle = (Math.PI * 2 * visibleIndex) / visibleCount - Math.PI / 2;
+    const degree = degreeMap.get(node.path) ?? 0;
+
+    points.set(node.path, {
+      ...node,
+      x: centerX + Math.cos(angle) * ringRadius,
+      y: centerY + Math.sin(angle) * ringRadius,
+      radius: Math.min(17, 10 + degree * 2)
+    });
+  });
+
+  return {
+    width,
+    height,
+    points,
+    edges: graph.edges
+      .map((edge) => ({
+        source: points.get(edge.source),
+        target: points.get(edge.target)
+      }))
+      .filter(
+        (edge): edge is { source: GraphPoint; target: GraphPoint } =>
+          Boolean(edge.source && edge.target)
+      )
+  };
+}
+
 export function App() {
   const [vault, setVault] = useState<VaultInfo | null>(null);
   const [files, setFiles] = useState<VaultFile[]>(demoFiles);
@@ -361,6 +442,8 @@ export function App() {
   const [backlinks, setBacklinks] = useState<Backlink[]>([]);
   const [tagIndex, setTagIndex] = useState<TagIndexEntry[]>([]);
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] });
+  const [isGraphOpen, setIsGraphOpen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [saveState, setSaveState] = useState("演示模式");
   const [error, setError] = useState<string | null>(null);
@@ -401,6 +484,7 @@ export function App() {
     () => tagIndex.find((entry) => entry.tag === activeTag) ?? null,
     [activeTag, tagIndex]
   );
+  const graphLayout = useMemo(() => buildGraphLayout(graph, activeFile), [graph, activeFile]);
   const canUseFileSystem = Boolean(window.markdown77);
 
   async function persistContent(filePath = activeFileRef.current, text = contentRef.current) {
@@ -415,7 +499,6 @@ export function App() {
     setSaveState("已自动保存");
     await refreshFiles();
     await refreshBacklinks(vault, filePath);
-    await refreshTags(vault);
     return true;
   }
 
@@ -439,6 +522,7 @@ export function App() {
     setExpandedFolders(new Set(nextVault.folders.map((folder) => folder.path)));
     setSaveState("Vault 已打开");
     await refreshTags(nextVault);
+    await refreshGraph(nextVault);
 
     const fileToOpen = nextVault.lastFilePath
       ? nextVault.files.find((file) => file.path === nextVault.lastFilePath)
@@ -479,6 +563,7 @@ export function App() {
     setFiles(contents.files);
     setFolders(contents.folders);
     await refreshTags(vault);
+    await refreshGraph(vault);
   }
 
   function toggleFolder(folderPath: string) {
@@ -561,6 +646,16 @@ export function App() {
     setActiveTag((currentTag) =>
       currentTag && nextTags.some((entry) => entry.tag === currentTag) ? currentTag : null
     );
+  }
+
+  async function refreshGraph(nextVault = vault) {
+    if (!nextVault || !window.markdown77) {
+      setGraph({ nodes: [], edges: [] });
+      return;
+    }
+
+    const nextGraph = await window.markdown77.getGraph(nextVault.path);
+    setGraph(nextGraph);
   }
 
   async function openFile(nextVault: VaultInfo, filePath: string) {
@@ -678,6 +773,7 @@ export function App() {
       setFiles(contents.files);
       setFolders(contents.folders);
       await refreshTags(vault);
+      await refreshGraph(vault);
 
       if (contents.files[0]) {
         await openFile(vault, contents.files[0].path);
@@ -992,6 +1088,16 @@ export function App() {
                   <span>刷新</span>
                 </button>
               )}
+              {vault && (
+                <button
+                  className={isGraphOpen ? "icon-button primary" : "icon-button"}
+                  type="button"
+                  onClick={() => setIsGraphOpen((current) => !current)}
+                >
+                  <Network size={16} />
+                  <span>图谱</span>
+                </button>
+              )}
               {vault && activeFile && (
                 <button className="icon-button primary" type="button" onClick={saveFile}>
                   <Save size={16} />
@@ -1018,6 +1124,79 @@ export function App() {
           </div>
 
           {error && <div className="error-banner">{error}</div>}
+
+          {vault && isGraphOpen && (
+            <section className="graph-panel" aria-label="Graph view">
+              <div className="graph-header">
+                <div>
+                  <span className="label">图谱视图</span>
+                  <strong>
+                    {graph.nodes.length} 个节点，{graph.edges.length} 条链接
+                  </strong>
+                </div>
+                <button
+                  className="clear-filter-button"
+                  type="button"
+                  onClick={() => setIsGraphOpen(false)}
+                  title="关闭图谱"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {graph.nodes.length > 0 ? (
+                <svg
+                  className="graph-canvas"
+                  viewBox={`0 0 ${graphLayout.width} ${graphLayout.height}`}
+                  role="img"
+                  aria-label="Vault link graph"
+                >
+                  <g className="graph-edges">
+                    {graphLayout.edges.map((edge) => (
+                      <line
+                        key={`${edge.source.path}-${edge.target.path}`}
+                        x1={edge.source.x}
+                        y1={edge.source.y}
+                        x2={edge.target.x}
+                        y2={edge.target.y}
+                      />
+                    ))}
+                  </g>
+                  <g className="graph-nodes">
+                    {Array.from(graphLayout.points.values()).map((node) => {
+                      const isActiveNode = node.path === activeFile;
+
+                      return (
+                        <g
+                          className={isActiveNode ? "graph-node active" : "graph-node"}
+                          key={node.path}
+                          role="button"
+                          tabIndex={0}
+                          transform={`translate(${node.x} ${node.y})`}
+                          onClick={() => {
+                            void openFile(vault, node.path);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              void openFile(vault, node.path);
+                            }
+                          }}
+                        >
+                          <circle r={node.radius} />
+                          <text y={node.radius + 16}>
+                            {node.title.length > 18 ? `${node.title.slice(0, 18)}...` : node.title}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </g>
+                </svg>
+              ) : (
+                <p className="empty-hint">当前 Vault 还没有可显示的 Markdown 笔记。</p>
+              )}
+            </section>
+          )}
 
           <div className="split-view">
             <div className="editor-surface">
