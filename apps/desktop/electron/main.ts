@@ -26,6 +26,14 @@ type Backlink = {
   snippet: string;
 };
 
+type TagIndexEntry = {
+  tag: string;
+  files: Array<{
+    path: string;
+    title: string;
+  }>;
+};
+
 type AppSettings = {
   lastVaultPath?: string;
   lastFilePath?: string;
@@ -208,6 +216,94 @@ function getBacklinkCandidates(relativePath: string) {
   ]);
 }
 
+function parseFrontmatterTags(content: string) {
+  const lines = content.split("\n");
+
+  if (lines[0]?.trim() !== "---") {
+    return [];
+  }
+
+  const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+
+  if (endIndex < 0) {
+    return [];
+  }
+
+  const tags: string[] = [];
+  const frontmatterLines = lines.slice(1, endIndex);
+
+  for (let index = 0; index < frontmatterLines.length; index += 1) {
+    const line = frontmatterLines[index];
+    const match = /^tags:\s*(.*)$/i.exec(line);
+
+    if (!match) {
+      continue;
+    }
+
+    const inlineValue = match[1].trim();
+
+    if (inlineValue.startsWith("[") && inlineValue.endsWith("]")) {
+      tags.push(
+        ...inlineValue
+          .slice(1, -1)
+          .split(",")
+          .map((tag) => tag.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean)
+      );
+      continue;
+    }
+
+    if (inlineValue) {
+      tags.push(
+        ...inlineValue
+          .split(/[,\s]+/)
+          .map((tag) => tag.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean)
+      );
+      continue;
+    }
+
+    let cursor = index + 1;
+
+    while (cursor < frontmatterLines.length) {
+      const listItem = /^\s*-\s+(.+)$/.exec(frontmatterLines[cursor]);
+
+      if (!listItem) {
+        break;
+      }
+
+      tags.push(listItem[1].trim().replace(/^["']|["']$/g, ""));
+      cursor += 1;
+    }
+  }
+
+  return Array.from(new Set(tags));
+}
+
+function parseFrontmatterTitle(content: string) {
+  const lines = content.split("\n");
+
+  if (lines[0]?.trim() !== "---") {
+    return null;
+  }
+
+  const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+
+  if (endIndex < 0) {
+    return null;
+  }
+
+  const titleLine = lines
+    .slice(1, endIndex)
+    .find((line) => /^title:\s*/i.test(line));
+
+  if (!titleLine) {
+    return null;
+  }
+
+  return titleLine.replace(/^title:\s*/i, "").trim().replace(/^["']|["']$/g, "") || null;
+}
+
 ipcMain.handle("vault:open", async () => {
   const options: OpenDialogOptions = {
     title: "打开 Vault 文件夹",
@@ -331,6 +427,39 @@ ipcMain.handle("vault:getBacklinks", async (_event, vaultPath: string, relativeP
   }
 
   return backlinks.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath, "zh-CN"));
+});
+
+ipcMain.handle("vault:getTags", async (_event, vaultPath: string) => {
+  const { files } = await walkVault(vaultPath);
+  const tagMap = new Map<string, TagIndexEntry>();
+
+  for (const file of files) {
+    const filePath = resolveVaultPath(vaultPath, file.path);
+    const content = await fs.readFile(filePath, "utf8");
+    const tags = parseFrontmatterTags(content);
+    const title = parseFrontmatterTitle(content) ?? file.path;
+
+    for (const tag of tags) {
+      const normalizedTag = tag.trim();
+
+      if (!normalizedTag) {
+        continue;
+      }
+
+      const existing = tagMap.get(normalizedTag) ?? {
+        tag: normalizedTag,
+        files: []
+      };
+
+      existing.files.push({
+        path: file.path,
+        title
+      });
+      tagMap.set(normalizedTag, existing);
+    }
+  }
+
+  return Array.from(tagMap.values()).sort((a, b) => a.tag.localeCompare(b.tag, "zh-CN"));
 });
 
 ipcMain.handle("vault:readFile", async (_event, vaultPath: string, relativePath: string) => {

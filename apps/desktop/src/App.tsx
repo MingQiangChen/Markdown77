@@ -17,10 +17,18 @@ import {
   Search,
   SplitSquareHorizontal,
   Tags,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Backlink, SearchResult, VaultFile, VaultFolder, VaultInfo } from "./global";
+import type {
+  Backlink,
+  SearchResult,
+  TagIndexEntry,
+  VaultFile,
+  VaultFolder,
+  VaultInfo
+} from "./global";
 
 type TreeNode = {
   path: string;
@@ -351,6 +359,8 @@ export function App() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [backlinks, setBacklinks] = useState<Backlink[]>([]);
+  const [tagIndex, setTagIndex] = useState<TagIndexEntry[]>([]);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [saveState, setSaveState] = useState("演示模式");
   const [error, setError] = useState<string | null>(null);
@@ -387,6 +397,10 @@ export function App() {
     () => buildFileTree(visibleFiles, visibleFolders),
     [visibleFiles, visibleFolders]
   );
+  const activeTagEntry = useMemo(
+    () => tagIndex.find((entry) => entry.tag === activeTag) ?? null,
+    [activeTag, tagIndex]
+  );
   const canUseFileSystem = Boolean(window.markdown77);
 
   async function persistContent(filePath = activeFileRef.current, text = contentRef.current) {
@@ -401,6 +415,7 @@ export function App() {
     setSaveState("已自动保存");
     await refreshFiles();
     await refreshBacklinks(vault, filePath);
+    await refreshTags(vault);
     return true;
   }
 
@@ -420,8 +435,10 @@ export function App() {
     setVault(nextVault);
     setFiles(nextVault.files);
     setFolders(nextVault.folders);
+    setActiveTag(null);
     setExpandedFolders(new Set(nextVault.folders.map((folder) => folder.path)));
     setSaveState("Vault 已打开");
+    await refreshTags(nextVault);
 
     const fileToOpen = nextVault.lastFilePath
       ? nextVault.files.find((file) => file.path === nextVault.lastFilePath)
@@ -461,6 +478,7 @@ export function App() {
     const contents = await window.markdown77.listFiles(vault.path);
     setFiles(contents.files);
     setFolders(contents.folders);
+    await refreshTags(vault);
   }
 
   function toggleFolder(folderPath: string) {
@@ -530,6 +548,19 @@ export function App() {
 
     const nextBacklinks = await window.markdown77.getBacklinks(nextVault.path, filePath);
     setBacklinks(nextBacklinks);
+  }
+
+  async function refreshTags(nextVault = vault) {
+    if (!nextVault || !window.markdown77) {
+      setTagIndex([]);
+      return;
+    }
+
+    const nextTags = await window.markdown77.getTags(nextVault.path);
+    setTagIndex(nextTags);
+    setActiveTag((currentTag) =>
+      currentTag && nextTags.some((entry) => entry.tag === currentTag) ? currentTag : null
+    );
   }
 
   async function openFile(nextVault: VaultInfo, filePath: string) {
@@ -646,6 +677,7 @@ export function App() {
       const contents = await window.markdown77.listFiles(vault.path);
       setFiles(contents.files);
       setFolders(contents.folders);
+      await refreshTags(vault);
 
       if (contents.files[0]) {
         await openFile(vault, contents.files[0].path);
@@ -904,6 +936,37 @@ export function App() {
             </section>
           )}
 
+          {vault && activeTagEntry && !normalizedQuery && (
+            <section className="tag-results" aria-label="Tag results">
+              <div className="section-title">
+                <span>标签：{activeTagEntry.tag}</span>
+                <button
+                  className="clear-filter-button"
+                  type="button"
+                  onClick={() => setActiveTag(null)}
+                  title="清除标签过滤"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+              {activeTagEntry.files.map((file) => (
+                <button
+                  className="tag-result"
+                  key={file.path}
+                  type="button"
+                  onClick={() => {
+                    if (vault) {
+                      void openFile(vault, file.path);
+                    }
+                  }}
+                >
+                  <strong>{file.title}</strong>
+                  <span>{file.path}</span>
+                </button>
+              ))}
+            </section>
+          )}
+
           <nav className="file-tree" aria-label="Vault files">
             {fileTree.length > 0 ? renderTree(fileTree) : <p className="empty-hint">没有文件。</p>}
           </nav>
@@ -1016,9 +1079,14 @@ export function App() {
                       <div className="tag-list">
                         {frontmatter.tags.length > 0 ? (
                           frontmatter.tags.map((tag) => (
-                            <span className="tag-chip" key={tag}>
+                            <button
+                              className="tag-chip"
+                              key={tag}
+                              type="button"
+                              onClick={() => setActiveTag(tag)}
+                            >
                               {tag}
-                            </span>
+                            </button>
                           ))
                         ) : (
                           <strong>无</strong>

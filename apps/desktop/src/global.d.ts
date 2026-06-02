@@ -27,6 +27,14 @@ export type Backlink = {
   snippet: string;
 };
 
+export type TagIndexEntry = {
+  tag: string;
+  files: Array<{
+    path: string;
+    title: string;
+  }>;
+};
+
 export type VaultInfo = {
   path: string;
   name: string;
@@ -45,6 +53,7 @@ declare global {
       listFiles: (vaultPath: string) => Promise<VaultContents>;
       search: (vaultPath: string, query: string) => Promise<SearchResult[]>;
       getBacklinks: (vaultPath: string, relativePath: string) => Promise<Backlink[]>;
+      getTags: (vaultPath: string) => Promise<TagIndexEntry[]>;
       readFile: (vaultPath: string, relativePath: string) => Promise<string>;
       writeFile: (
         vaultPath: string,

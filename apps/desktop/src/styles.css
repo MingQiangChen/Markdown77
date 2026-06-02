@@ -165,7 +165,8 @@ button:disabled {
   overflow: auto;
 }
 
-.search-results {
+.search-results,
+.tag-results {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -186,7 +187,25 @@ button:disabled {
   font-size: 11px;
 }
 
-.search-result {
+.clear-filter-button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #67717f;
+  cursor: pointer;
+}
+
+.clear-filter-button:hover {
+  background: #eef2f5;
+  color: #39414d;
+}
+
+.search-result,
+.tag-result {
   display: grid;
   gap: 4px;
   border: 1px solid #d8dee5;
@@ -198,11 +217,13 @@ button:disabled {
   cursor: pointer;
 }
 
-.search-result:hover {
+.search-result:hover,
+.tag-result:hover {
   background: #f4f7f9;
 }
 
-.search-result strong {
+.search-result strong,
+.tag-result strong {
   overflow: hidden;
   color: #124a45;
   font-size: 13px;
@@ -210,7 +231,8 @@ button:disabled {
   white-space: nowrap;
 }
 
-.search-result span {
+.search-result span,
+.tag-result span {
   display: -webkit-box;
   overflow: hidden;
   color: #67717f;
@@ -345,6 +367,7 @@ button:disabled {
 .tag-chip {
   max-width: 100%;
   overflow: hidden;
+  border: 0;
   border-radius: 999px;
   padding: 2px 7px;
   background: #e0f1ee;
@@ -352,6 +375,11 @@ button:disabled {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.tag-chip:hover {
+  background: #cce8e3;
 }
 
 .outline-list {

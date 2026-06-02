@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("markdown77", {
     ipcRenderer.invoke("vault:search", vaultPath, query),
   getBacklinks: (vaultPath: string, relativePath: string) =>
     ipcRenderer.invoke("vault:getBacklinks", vaultPath, relativePath),
+  getTags: (vaultPath: string) => ipcRenderer.invoke("vault:getTags", vaultPath),
   readFile: (vaultPath: string, relativePath: string) =>
     ipcRenderer.invoke("vault:readFile", vaultPath, relativePath),
   writeFile: (vaultPath: string, relativePath: string, content: string) =>
