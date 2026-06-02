@@ -14,7 +14,7 @@ import {
   SplitSquareHorizontal,
   Trash2
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Backlink, SearchResult, VaultFile, VaultFolder, VaultInfo } from "./global";
 
 const md = new MarkdownIt({
@@ -104,6 +104,10 @@ export function App() {
   const [backlinks, setBacklinks] = useState<Backlink[]>([]);
   const [saveState, setSaveState] = useState("演示模式");
   const [error, setError] = useState<string | null>(null);
+  const activeFileRef = useRef(activeFile);
+  const contentRef = useRef(content);
+  const lastSavedContentRef = useRef(content);
+  const isLoadingFileRef = useRef(false);
 
   const normalizedQuery = query.trim();
   const rendered = useMemo(() => renderWikiLinks(content), [content]);
@@ -117,6 +121,33 @@ export function App() {
     : folders;
   const canUseFileSystem = Boolean(window.markdown77);
 
+  async function persistContent(filePath = activeFileRef.current, text = contentRef.current) {
+    if (!vault || !filePath || !window.markdown77) {
+      return false;
+    }
+
+    setError(null);
+    setSaveState("保存中");
+    await window.markdown77.writeFile(vault.path, filePath, text);
+    lastSavedContentRef.current = text;
+    setSaveState("已自动保存");
+    await refreshFiles();
+    await refreshBacklinks(vault, filePath);
+    return true;
+  }
+
+  async function saveIfDirty() {
+    if (!vault || !activeFileRef.current || !window.markdown77) {
+      return;
+    }
+
+    if (contentRef.current === lastSavedContentRef.current) {
+      return;
+    }
+
+    await persistContent(activeFileRef.current, contentRef.current);
+  }
+
   async function openVault() {
     if (!window.markdown77) {
       setError("请在 Electron 桌面壳中打开 Vault。");
@@ -124,6 +155,7 @@ export function App() {
     }
 
     setError(null);
+    await saveIfDirty();
     const nextVault = await window.markdown77.openVault();
 
     if (!nextVault) {
@@ -170,11 +202,19 @@ export function App() {
     }
 
     setError(null);
+    await saveIfDirty();
+    isLoadingFileRef.current = true;
     const text = await window.markdown77.readFile(nextVault.path, filePath);
     setActiveFile(filePath);
     setContent(text);
+    activeFileRef.current = filePath;
+    contentRef.current = text;
+    lastSavedContentRef.current = text;
     setSaveState("已加载");
     await refreshBacklinks(nextVault, filePath);
+    window.setTimeout(() => {
+      isLoadingFileRef.current = false;
+    }, 0);
   }
 
   async function saveFile() {
@@ -183,11 +223,8 @@ export function App() {
     }
 
     setError(null);
-    setSaveState("保存中");
-    await window.markdown77.writeFile(vault.path, activeFile, content);
+    await persistContent(activeFile, content);
     setSaveState("已保存");
-    await refreshFiles();
-    await refreshBacklinks(vault, activeFile);
   }
 
   async function createNote() {
@@ -314,11 +351,32 @@ export function App() {
   }
 
   useEffect(() => {
+    activeFileRef.current = activeFile;
+  }, [activeFile]);
+
+  useEffect(() => {
+    contentRef.current = content;
+
     if (!vault || !activeFile || !window.markdown77) {
       return;
     }
 
+    if (isLoadingFileRef.current || content === lastSavedContentRef.current) {
+      return;
+    }
+
     setSaveState("有未保存修改");
+
+    const timeout = window.setTimeout(() => {
+      void persistContent(activeFile, content).catch((saveError) => {
+        setError(saveError instanceof Error ? saveError.message : "自动保存失败。");
+        setSaveState("自动保存失败");
+      });
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
   }, [content, activeFile, vault]);
 
   useEffect(() => {
