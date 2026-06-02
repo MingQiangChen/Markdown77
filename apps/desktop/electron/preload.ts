@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("markdown77", {
   openVault: () => ipcRenderer.invoke("vault:open"),
   listFiles: (vaultPath: string) => ipcRenderer.invoke("vault:listFiles", vaultPath),
+  search: (vaultPath: string, query: string) =>
+    ipcRenderer.invoke("vault:search", vaultPath, query),
   readFile: (vaultPath: string, relativePath: string) =>
     ipcRenderer.invoke("vault:readFile", vaultPath, relativePath),
   writeFile: (vaultPath: string, relativePath: string, content: string) =>

@@ -174,6 +174,67 @@ button:disabled {
   padding-bottom: 10px;
 }
 
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  border-bottom: 1px solid #edf0f3;
+  padding-bottom: 10px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #67717f;
+  font-size: 12px;
+}
+
+.section-title small {
+  font-size: 11px;
+}
+
+.search-result {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #d8dee5;
+  border-radius: 6px;
+  padding: 8px;
+  background: #ffffff;
+  color: #39414d;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-result:hover {
+  background: #f4f7f9;
+}
+
+.search-result strong {
+  overflow: hidden;
+  color: #124a45;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #67717f;
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.empty-hint {
+  margin: 4px 0 0;
+  color: #8993a0;
+  font-size: 12px;
+}
+
 .folder-item,
 .file-item {
   display: flex;

@@ -15,7 +15,7 @@ import {
   Trash2
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { VaultFile, VaultFolder, VaultInfo } from "./global";
+import type { SearchResult, VaultFile, VaultFolder, VaultInfo } from "./global";
 
 const md = new MarkdownIt({
   html: false,
@@ -71,16 +71,21 @@ export function App() {
   const [content, setContent] = useState(initialContent);
   const [activeFile, setActiveFile] = useState("首页.md");
   const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [saveState, setSaveState] = useState("演示模式");
   const [error, setError] = useState<string | null>(null);
 
+  const normalizedQuery = query.trim();
   const rendered = useMemo(() => md.render(content), [content]);
-  const visibleFiles = files.filter((file) =>
-    file.path.toLowerCase().includes(query.trim().toLowerCase())
-  );
-  const visibleFolders = folders.filter((folder) =>
-    folder.path.toLowerCase().includes(query.trim().toLowerCase())
-  );
+  const visibleFiles = normalizedQuery
+    ? files.filter((file) => file.path.toLowerCase().includes(normalizedQuery.toLowerCase()))
+    : files;
+  const visibleFolders = normalizedQuery
+    ? folders.filter((folder) =>
+        folder.path.toLowerCase().includes(normalizedQuery.toLowerCase())
+      )
+    : folders;
   const canUseFileSystem = Boolean(window.markdown77);
 
   async function openVault() {
@@ -246,6 +251,42 @@ export function App() {
     setSaveState("有未保存修改");
   }, [content, activeFile, vault]);
 
+  useEffect(() => {
+    if (!vault || !window.markdown77 || !normalizedQuery) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let isActive = true;
+    setIsSearching(true);
+
+    const timeout = window.setTimeout(() => {
+      void window.markdown77
+        ?.search(vault.path, normalizedQuery)
+        .then((results) => {
+          if (isActive) {
+            setSearchResults(results);
+          }
+        })
+        .catch((searchError) => {
+          if (isActive) {
+            setError(searchError instanceof Error ? searchError.message : "搜索失败。");
+          }
+        })
+        .finally(() => {
+          if (isActive) {
+            setIsSearching(false);
+          }
+        });
+    }, 180);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeout);
+    };
+  }, [normalizedQuery, vault]);
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -305,6 +346,33 @@ export function App() {
                 </div>
               ))}
             </div>
+          )}
+
+          {vault && normalizedQuery && (
+            <section className="search-results" aria-label="Search results">
+              <div className="section-title">
+                <span>全文搜索</span>
+                <small>{isSearching ? "搜索中" : `${searchResults.length} 个结果`}</small>
+              </div>
+              {searchResults.map((result) => (
+                <button
+                  className="search-result"
+                  key={`${result.path}-${result.matchType}`}
+                  type="button"
+                  onClick={() => {
+                    if (vault) {
+                      void openFile(vault, result.path);
+                    }
+                  }}
+                >
+                  <strong>{result.title}</strong>
+                  <span>{result.snippet}</span>
+                </button>
+              ))}
+              {!isSearching && searchResults.length === 0 && (
+                <p className="empty-hint">没有正文匹配。</p>
+              )}
+            </section>
           )}
 
           <nav className="file-list" aria-label="Vault files">

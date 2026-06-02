@@ -13,6 +13,13 @@ type VaultFolder = {
   name: string;
 };
 
+type SearchResult = {
+  path: string;
+  title: string;
+  snippet: string;
+  matchType: "filename" | "content";
+};
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {
@@ -126,6 +133,22 @@ async function assertPathExists(filePath: string) {
   await fs.access(filePath);
 }
 
+function createSnippet(content: string, query: string) {
+  const normalizedContent = content.replace(/\s+/g, " ").trim();
+  const index = normalizedContent.toLowerCase().indexOf(query.toLowerCase());
+
+  if (index === -1) {
+    return normalizedContent.slice(0, 120);
+  }
+
+  const start = Math.max(0, index - 48);
+  const end = Math.min(normalizedContent.length, index + query.length + 72);
+  const prefix = start > 0 ? "..." : "";
+  const suffix = end < normalizedContent.length ? "..." : "";
+
+  return `${prefix}${normalizedContent.slice(start, end)}${suffix}`;
+}
+
 ipcMain.handle("vault:open", async () => {
   const options: OpenDialogOptions = {
     title: "打开 Vault 文件夹",
@@ -152,6 +175,37 @@ ipcMain.handle("vault:open", async () => {
 
 ipcMain.handle("vault:listFiles", async (_event, vaultPath: string) => {
   return walkVault(vaultPath);
+});
+
+ipcMain.handle("vault:search", async (_event, vaultPath: string, query: string) => {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return [] satisfies SearchResult[];
+  }
+
+  const { files } = await walkVault(vaultPath);
+  const results: SearchResult[] = [];
+
+  for (const file of files) {
+    const filePath = resolveVaultPath(vaultPath, file.path);
+    const filenameMatches = file.path.toLowerCase().includes(normalizedQuery);
+    const content = await fs.readFile(filePath, "utf8");
+    const contentMatches = content.toLowerCase().includes(normalizedQuery);
+
+    if (!filenameMatches && !contentMatches) {
+      continue;
+    }
+
+    results.push({
+      path: file.path,
+      title: file.path,
+      snippet: contentMatches ? createSnippet(content, query) : "文件名匹配",
+      matchType: contentMatches ? "content" : "filename"
+    });
+  }
+
+  return results.slice(0, 100);
 });
 
 ipcMain.handle("vault:readFile", async (_event, vaultPath: string, relativePath: string) => {

@@ -14,6 +14,13 @@ export type VaultContents = {
   folders: VaultFolder[];
 };
 
+export type SearchResult = {
+  path: string;
+  title: string;
+  snippet: string;
+  matchType: "filename" | "content";
+};
+
 export type VaultInfo = {
   path: string;
   name: string;
@@ -26,6 +33,7 @@ declare global {
     markdown77?: {
       openVault: () => Promise<VaultInfo | null>;
       listFiles: (vaultPath: string) => Promise<VaultContents>;
+      search: (vaultPath: string, query: string) => Promise<SearchResult[]>;
       readFile: (vaultPath: string, relativePath: string) => Promise<string>;
       writeFile: (
         vaultPath: string,
