@@ -4,5 +4,7 @@
 .trash/
 node_modules/
 dist/
+dist-electron/
 build/
 *.tsbuildinfo
+demo-vault/

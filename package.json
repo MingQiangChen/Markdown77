@@ -5,6 +5,7 @@
   "description": "Cross-platform Markdown knowledge base editor.",
   "scripts": {
     "dev": "npm --workspace apps/desktop run dev",
+    "dev:web": "npm --workspace apps/desktop run dev:web",
     "build": "npm --workspace apps/desktop run build",
     "typecheck": "npm --workspace apps/desktop run typecheck"
   },

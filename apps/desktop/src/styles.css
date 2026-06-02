@@ -197,6 +197,65 @@ input {
   font-size: 13px;
 }
 
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  border: 1px solid #c9d0d9;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #39414d;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: #f0f3f6;
+}
+
+.icon-button.primary {
+  border-color: #1f6f68;
+  background: #1f6f68;
+  color: #ffffff;
+}
+
+.icon-button.primary:hover {
+  background: #195b56;
+}
+
+.sidebar-note {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  border: 1px solid #e3d7a5;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fff8dc;
+  color: #675414;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sidebar-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.error-banner {
+  border-bottom: 1px solid #e7b7b7;
+  padding: 8px 16px;
+  background: #fff1f1;
+  color: #8a1f1f;
+  font-size: 13px;
+}
+
 .split-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
