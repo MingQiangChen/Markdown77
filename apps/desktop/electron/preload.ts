@@ -6,5 +6,9 @@ contextBridge.exposeInMainWorld("markdown77", {
   readFile: (vaultPath: string, relativePath: string) =>
     ipcRenderer.invoke("vault:readFile", vaultPath, relativePath),
   writeFile: (vaultPath: string, relativePath: string, content: string) =>
-    ipcRenderer.invoke("vault:writeFile", vaultPath, relativePath, content)
+    ipcRenderer.invoke("vault:writeFile", vaultPath, relativePath, content),
+  createFile: (vaultPath: string, preferredRelativePath: string, content: string) =>
+    ipcRenderer.invoke("vault:createFile", vaultPath, preferredRelativePath, content),
+  createFolder: (vaultPath: string, folderName: string) =>
+    ipcRenderer.invoke("vault:createFolder", vaultPath, folderName)
 });

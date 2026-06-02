@@ -4,23 +4,40 @@ export type VaultFile = {
   modifiedAt: number;
 };
 
+export type VaultFolder = {
+  path: string;
+  name: string;
+};
+
+export type VaultContents = {
+  files: VaultFile[];
+  folders: VaultFolder[];
+};
+
 export type VaultInfo = {
   path: string;
   name: string;
   files: VaultFile[];
+  folders: VaultFolder[];
 };
 
 declare global {
   interface Window {
     markdown77?: {
       openVault: () => Promise<VaultInfo | null>;
-      listFiles: (vaultPath: string) => Promise<VaultFile[]>;
+      listFiles: (vaultPath: string) => Promise<VaultContents>;
       readFile: (vaultPath: string, relativePath: string) => Promise<string>;
       writeFile: (
         vaultPath: string,
         relativePath: string,
         content: string
       ) => Promise<boolean>;
+      createFile: (
+        vaultPath: string,
+        preferredRelativePath: string,
+        content: string
+      ) => Promise<VaultFile>;
+      createFolder: (vaultPath: string, folderName: string) => Promise<VaultFolder>;
     };
   }
 }

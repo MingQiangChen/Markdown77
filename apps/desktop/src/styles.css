@@ -25,6 +25,11 @@ input {
   font: inherit;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .app-shell {
   display: grid;
   grid-template-rows: 64px 1fr 28px;
@@ -103,6 +108,13 @@ input {
   padding: 12px;
 }
 
+.sidebar-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .search-box {
   display: flex;
   align-items: center;
@@ -124,28 +136,68 @@ input {
   color: #20242a;
 }
 
+.create-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.tool-icon-button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #cfd5dd;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #39414d;
+  cursor: pointer;
+}
+
+.tool-icon-button:hover:not(:disabled) {
+  background: #eef2f5;
+}
+
 .file-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 12px;
+  margin-top: 10px;
   overflow: auto;
 }
 
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+  border-bottom: 1px solid #edf0f3;
+  padding-bottom: 10px;
+}
+
+.folder-item,
 .file-item {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 34px;
-  border: 0;
   border-radius: 6px;
   padding: 7px 8px;
+}
+
+.folder-item {
+  color: #67717f;
+  font-size: 13px;
+}
+
+.file-item {
+  border: 0;
   background: transparent;
   color: #39414d;
   text-align: left;
   cursor: pointer;
 }
 
+.folder-item span,
 .file-item span {
   overflow: hidden;
   text-overflow: ellipsis;
