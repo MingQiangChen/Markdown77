@@ -3,6 +3,7 @@ import CodeMirror, { type EditorView } from "@uiw/react-codemirror";
 import MarkdownIt from "markdown-it";
 import {
   AlertCircle,
+  CalendarDays,
   FileText,
   FolderPlus,
   FolderOpen,
@@ -15,6 +16,7 @@ import {
   Save,
   Search,
   SplitSquareHorizontal,
+  Tags,
   Trash2
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -34,13 +36,30 @@ type OutlineItem = {
   line: number;
 };
 
+type FrontmatterInfo = {
+  entries: Array<{
+    key: string;
+    value: string;
+  }>;
+  tags: string[];
+  title?: string;
+  created?: string;
+  updated?: string;
+};
+
 const md = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true
 });
 
-const initialContent = `# Markdown77
+const initialContent = `---
+title: Markdown77
+tags: [markdown, desktop, mvp]
+created: 2026-06-03
+---
+
+# Markdown77
 
 欢迎使用 Markdown77 桌面 MVP 原型。
 
@@ -107,6 +126,121 @@ function renderWikiLinks(markdownText: string) {
   });
 
   return md.render(escaped);
+}
+
+function splitFrontmatter(markdownText: string) {
+  const lines = markdownText.split("\n");
+
+  if (lines[0]?.trim() !== "---") {
+    return {
+      body: markdownText,
+      bodyStartLine: 1,
+      rawFrontmatter: ""
+    };
+  }
+
+  const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+
+  if (endIndex < 0) {
+    return {
+      body: markdownText,
+      bodyStartLine: 1,
+      rawFrontmatter: ""
+    };
+  }
+
+  return {
+    body: lines.slice(endIndex + 1).join("\n").replace(/^\n/, ""),
+    bodyStartLine: endIndex + 2,
+    rawFrontmatter: lines.slice(1, endIndex).join("\n")
+  };
+}
+
+function parseTagValue(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return [];
+  }
+
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed
+      .slice(1, -1)
+      .split(",")
+      .map((tag) => tag.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+
+  return trimmed
+    .split(/[,\s]+/)
+    .map((tag) => tag.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+}
+
+function parseFrontmatter(markdownText: string): FrontmatterInfo {
+  const { rawFrontmatter } = splitFrontmatter(markdownText);
+
+  if (!rawFrontmatter) {
+    return {
+      entries: [],
+      tags: []
+    };
+  }
+
+  const entries: FrontmatterInfo["entries"] = [];
+  const tags: string[] = [];
+  const lines = rawFrontmatter.split("\n");
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const pair = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
+
+    if (!pair) {
+      continue;
+    }
+
+    const key = pair[1];
+    let value = pair[2].trim().replace(/^["']|["']$/g, "");
+    const normalizedKey = key.toLowerCase();
+
+    if (normalizedKey === "tags") {
+      const inlineTags = parseTagValue(value);
+
+      if (inlineTags.length > 0) {
+        tags.push(...inlineTags);
+      } else {
+        let cursor = index + 1;
+
+        while (cursor < lines.length) {
+          const listItem = /^\s*-\s+(.+)$/.exec(lines[cursor]);
+
+          if (!listItem) {
+            break;
+          }
+
+          tags.push(listItem[1].trim().replace(/^["']|["']$/g, ""));
+          cursor += 1;
+        }
+      }
+    }
+
+    if (value && normalizedKey !== "tags") {
+      entries.push({ key, value });
+    } else if (normalizedKey === "tags") {
+      entries.push({ key, value: tags.length > 0 ? tags.join(", ") : "无" });
+    }
+  }
+
+  const valueFor = (key: string) =>
+    entries.find((entry) => entry.key.toLowerCase() === key)?.value;
+
+  return {
+    entries,
+    tags: Array.from(new Set(tags)),
+    title: valueFor("title"),
+    created: valueFor("created"),
+    updated: valueFor("updated")
+  };
 }
 
 function buildFileTree(files: VaultFile[], folders: VaultFolder[]) {
@@ -180,7 +314,9 @@ function buildFileTree(files: VaultFile[], folders: VaultFolder[]) {
 }
 
 function extractOutline(markdownText: string): OutlineItem[] {
-  return markdownText
+  const frontmatter = splitFrontmatter(markdownText);
+
+  return frontmatter.body
     .split("\n")
     .map((line, index) => {
       const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
@@ -196,10 +332,10 @@ function extractOutline(markdownText: string): OutlineItem[] {
       }
 
       return {
-        id: `${index + 1}-${title}`,
+        id: `${frontmatter.bodyStartLine + index}-${title}`,
         level: match[1].length,
         title,
-        line: index + 1
+        line: frontmatter.bodyStartLine + index
       };
     })
     .filter((item): item is OutlineItem => Boolean(item));
@@ -225,7 +361,9 @@ export function App() {
   const isLoadingFileRef = useRef(false);
 
   const normalizedQuery = query.trim();
-  const rendered = useMemo(() => renderWikiLinks(content), [content]);
+  const frontmatter = useMemo(() => parseFrontmatter(content), [content]);
+  const previewContent = useMemo(() => splitFrontmatter(content).body, [content]);
+  const rendered = useMemo(() => renderWikiLinks(previewContent), [previewContent]);
   const outline = useMemo(() => extractOutline(content), [content]);
   const visibleFiles = useMemo(
     () =>
@@ -444,7 +582,7 @@ export function App() {
     const newFile = await window.markdown77.createFile(
       vault.path,
       preferredPath,
-      `# ${title}\n\n`
+      `---\ntitle: ${title}\ntags: []\ncreated: ${new Date().toISOString().slice(0, 10)}\n---\n\n# ${title}\n\n`
     );
     await refreshFiles();
     await openFile(vault, newFile.path);
@@ -544,7 +682,11 @@ export function App() {
     }
 
     const title = target.replace(/\.md$/i, "").split(/[\\/]/).pop() || "新笔记";
-    const newFile = await window.markdown77.createFile(vault.path, target, `# ${title}\n\n`);
+    const newFile = await window.markdown77.createFile(
+      vault.path,
+      target,
+      `---\ntitle: ${title}\ntags: []\ncreated: ${new Date().toISOString().slice(0, 10)}\n---\n\n# ${title}\n\n`
+    );
     await refreshFiles();
     await openFile(vault, newFile.path);
     setSaveState("已创建链接笔记");
@@ -840,6 +982,55 @@ export function App() {
 
           {vault && activeFile && (
             <div className="inspector-panels">
+              <section className="properties-panel">
+                <div className="section-title">
+                  <span>属性</span>
+                  <small>{frontmatter.entries.length} 项</small>
+                </div>
+                {frontmatter.entries.length > 0 ? (
+                  <div className="property-list">
+                    {frontmatter.title && (
+                      <div className="property-row">
+                        <FileText size={14} />
+                        <span>标题</span>
+                        <strong>{frontmatter.title}</strong>
+                      </div>
+                    )}
+                    {frontmatter.created && (
+                      <div className="property-row">
+                        <CalendarDays size={14} />
+                        <span>创建</span>
+                        <strong>{frontmatter.created}</strong>
+                      </div>
+                    )}
+                    {frontmatter.updated && (
+                      <div className="property-row">
+                        <CalendarDays size={14} />
+                        <span>更新</span>
+                        <strong>{frontmatter.updated}</strong>
+                      </div>
+                    )}
+                    <div className="tag-row">
+                      <Tags size={14} />
+                      <span>标签</span>
+                      <div className="tag-list">
+                        {frontmatter.tags.length > 0 ? (
+                          frontmatter.tags.map((tag) => (
+                            <span className="tag-chip" key={tag}>
+                              {tag}
+                            </span>
+                          ))
+                        ) : (
+                          <strong>无</strong>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="empty-hint">当前笔记还没有 Frontmatter。</p>
+                )}
+              </section>
+
               <section className="outline-panel">
                 <div className="section-title">
                   <span>大纲</span>
