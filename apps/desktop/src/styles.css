@@ -282,6 +282,15 @@ button:disabled {
   background: #195b56;
 }
 
+.icon-button.danger {
+  border-color: #e0b5b5;
+  color: #8a1f1f;
+}
+
+.icon-button.danger:hover {
+  background: #fff1f1;
+}
+
 .sidebar-note {
   display: flex;
   gap: 8px;

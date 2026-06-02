@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -122,6 +122,10 @@ async function getAvailablePath(vaultPath: string, preferredRelativePath: string
   }
 }
 
+async function assertPathExists(filePath: string) {
+  await fs.access(filePath);
+}
+
 ipcMain.handle("vault:open", async () => {
   const options: OpenDialogOptions = {
     title: "打开 Vault 文件夹",
@@ -206,6 +210,50 @@ ipcMain.handle("vault:createFolder", async (_event, vaultPath: string, folderNam
       };
     }
   }
+});
+
+ipcMain.handle(
+  "vault:renameFile",
+  async (_event, vaultPath: string, currentRelativePath: string, nextRelativePath: string) => {
+    const currentPath = resolveVaultPath(vaultPath, currentRelativePath);
+    const normalizedNextPath = normalizeMarkdownPath(nextRelativePath);
+    const nextPath = resolveVaultPath(vaultPath, normalizedNextPath);
+
+    await assertPathExists(currentPath);
+
+    try {
+      await fs.access(nextPath);
+      throw new Error("目标文件已存在。");
+    } catch (error) {
+      if (error instanceof Error && error.message === "目标文件已存在。") {
+        throw error;
+      }
+    }
+
+    await fs.mkdir(path.dirname(nextPath), { recursive: true });
+    await fs.rename(currentPath, nextPath);
+
+    const stat = await fs.stat(nextPath);
+
+    return {
+      path: normalizedNextPath,
+      name: path.basename(normalizedNextPath),
+      modifiedAt: stat.mtimeMs
+    };
+  }
+);
+
+ipcMain.handle("vault:deleteFile", async (_event, vaultPath: string, relativePath: string) => {
+  const filePath = resolveVaultPath(vaultPath, relativePath);
+  await assertPathExists(filePath);
+
+  try {
+    await shell.trashItem(filePath);
+  } catch {
+    await fs.rm(filePath, { force: true });
+  }
+
+  return true;
 });
 
 app.whenReady().then(createWindow);

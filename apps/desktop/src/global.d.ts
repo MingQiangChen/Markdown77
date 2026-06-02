@@ -38,6 +38,12 @@ declare global {
         content: string
       ) => Promise<VaultFile>;
       createFolder: (vaultPath: string, folderName: string) => Promise<VaultFolder>;
+      renameFile: (
+        vaultPath: string,
+        currentRelativePath: string,
+        nextRelativePath: string
+      ) => Promise<VaultFile>;
+      deleteFile: (vaultPath: string, relativePath: string) => Promise<boolean>;
     };
   }
 }

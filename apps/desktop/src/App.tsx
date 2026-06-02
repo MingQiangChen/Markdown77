@@ -7,10 +7,12 @@ import {
   FolderPlus,
   FolderOpen,
   FilePlus2,
+  Pencil,
   RefreshCcw,
   Save,
   Search,
-  SplitSquareHorizontal
+  SplitSquareHorizontal,
+  Trash2
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { VaultFile, VaultFolder, VaultInfo } from "./global";
@@ -184,6 +186,58 @@ export function App() {
     setSaveState("文件夹已创建");
   }
 
+  async function renameActiveFile() {
+    if (!vault || !activeFile || !window.markdown77) {
+      return;
+    }
+
+    const nextPath = window.prompt("重命名笔记", activeFile);
+
+    if (!nextPath || nextPath === activeFile) {
+      return;
+    }
+
+    try {
+      setError(null);
+      const renamedFile = await window.markdown77.renameFile(vault.path, activeFile, nextPath);
+      await refreshFiles();
+      await openFile(vault, renamedFile.path);
+      setSaveState("已重命名");
+    } catch (renameError) {
+      setError(renameError instanceof Error ? renameError.message : "重命名失败。");
+    }
+  }
+
+  async function deleteActiveFile() {
+    if (!vault || !activeFile || !window.markdown77) {
+      return;
+    }
+
+    const confirmed = window.confirm(`确定删除 ${activeFile}？`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setError(null);
+      await window.markdown77.deleteFile(vault.path, activeFile);
+      const contents = await window.markdown77.listFiles(vault.path);
+      setFiles(contents.files);
+      setFolders(contents.folders);
+
+      if (contents.files[0]) {
+        await openFile(vault, contents.files[0].path);
+      } else {
+        setActiveFile("");
+        setContent("# 空 Vault\n\n这个 Vault 里还没有 Markdown 文件。");
+        setSaveState("已删除");
+      }
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除失败。");
+    }
+  }
+
   useEffect(() => {
     if (!vault || !activeFile || !window.markdown77) {
       return;
@@ -298,6 +352,18 @@ export function App() {
                 <button className="icon-button primary" type="button" onClick={saveFile}>
                   <Save size={16} />
                   <span>保存</span>
+                </button>
+              )}
+              {vault && activeFile && (
+                <button className="icon-button" type="button" onClick={renameActiveFile}>
+                  <Pencil size={16} />
+                  <span>重命名</span>
+                </button>
+              )}
+              {vault && activeFile && (
+                <button className="icon-button danger" type="button" onClick={deleteActiveFile}>
+                  <Trash2 size={16} />
+                  <span>删除</span>
                 </button>
               )}
               <div className="mode-indicator">
