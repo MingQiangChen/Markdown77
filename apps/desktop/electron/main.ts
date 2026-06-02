@@ -26,22 +26,27 @@ type Backlink = {
   snippet: string;
 };
 
+type AppSettings = {
+  lastVaultPath?: string;
+  lastFilePath?: string;
+};
+
 let mainWindow: BrowserWindow | null = null;
 
 function getSettingsPath() {
   return path.join(app.getPath("userData"), "settings.json");
 }
 
-async function readSettings(): Promise<{ lastVaultPath?: string }> {
+async function readSettings(): Promise<AppSettings> {
   try {
     const settings = await fs.readFile(getSettingsPath(), "utf8");
-    return JSON.parse(settings) as { lastVaultPath?: string };
+    return JSON.parse(settings) as AppSettings;
   } catch {
     return {};
   }
 }
 
-async function writeSettings(settings: { lastVaultPath?: string }) {
+async function writeSettings(settings: AppSettings) {
   await fs.mkdir(path.dirname(getSettingsPath()), { recursive: true });
   await fs.writeFile(getSettingsPath(), JSON.stringify(settings, null, 2), "utf8");
 }
@@ -230,7 +235,15 @@ ipcMain.handle("settings:getLastVault", async () => {
   }
 
   try {
-    return await loadVault(settings.lastVaultPath);
+    const vault = await loadVault(settings.lastVaultPath);
+    const lastFileExists = settings.lastFilePath
+      ? vault.files.some((file) => file.path === settings.lastFilePath)
+      : false;
+
+    return {
+      ...vault,
+      lastFilePath: lastFileExists ? settings.lastFilePath : null
+    };
   } catch {
     await writeSettings({});
     return null;
@@ -239,6 +252,15 @@ ipcMain.handle("settings:getLastVault", async () => {
 
 ipcMain.handle("settings:setLastVault", async (_event, vaultPath: string | null) => {
   await writeSettings({ lastVaultPath: vaultPath ?? undefined });
+  return true;
+});
+
+ipcMain.handle("settings:setLastFile", async (_event, filePath: string | null) => {
+  const settings = await readSettings();
+  await writeSettings({
+    ...settings,
+    lastFilePath: filePath ?? undefined
+  });
   return true;
 });
 

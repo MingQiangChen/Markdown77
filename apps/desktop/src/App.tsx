@@ -249,8 +249,12 @@ export function App() {
     setExpandedFolders(new Set(nextVault.folders.map((folder) => folder.path)));
     setSaveState("Vault 已打开");
 
-    if (nextVault.files[0]) {
-      await openFile(nextVault, nextVault.files[0].path);
+    const fileToOpen = nextVault.lastFilePath
+      ? nextVault.files.find((file) => file.path === nextVault.lastFilePath)
+      : nextVault.files[0];
+
+    if (fileToOpen) {
+      await openFile(nextVault, fileToOpen.path);
     } else {
       setActiveFile("");
       setContent("# 新 Vault\n\n这个 Vault 里还没有 Markdown 文件。");
@@ -369,6 +373,7 @@ export function App() {
     activeFileRef.current = filePath;
     contentRef.current = text;
     lastSavedContentRef.current = text;
+    await window.markdown77.setLastFile(filePath);
     setSaveState("已加载");
     await refreshBacklinks(nextVault, filePath);
     window.setTimeout(() => {

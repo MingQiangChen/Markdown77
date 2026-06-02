@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("markdown77", {
   getLastVault: () => ipcRenderer.invoke("settings:getLastVault"),
   setLastVault: (vaultPath: string | null) =>
     ipcRenderer.invoke("settings:setLastVault", vaultPath),
+  setLastFile: (filePath: string | null) =>
+    ipcRenderer.invoke("settings:setLastFile", filePath),
   listFiles: (vaultPath: string) => ipcRenderer.invoke("vault:listFiles", vaultPath),
   search: (vaultPath: string, query: string) =>
     ipcRenderer.invoke("vault:search", vaultPath, query),

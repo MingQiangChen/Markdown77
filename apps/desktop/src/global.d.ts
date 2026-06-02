@@ -32,6 +32,7 @@ export type VaultInfo = {
   name: string;
   files: VaultFile[];
   folders: VaultFolder[];
+  lastFilePath?: string | null;
 };
 
 declare global {
@@ -40,6 +41,7 @@ declare global {
       openVault: () => Promise<VaultInfo | null>;
       getLastVault: () => Promise<VaultInfo | null>;
       setLastVault: (vaultPath: string | null) => Promise<boolean>;
+      setLastFile: (filePath: string | null) => Promise<boolean>;
       listFiles: (vaultPath: string) => Promise<VaultContents>;
       search: (vaultPath: string, query: string) => Promise<SearchResult[]>;
       getBacklinks: (vaultPath: string, relativePath: string) => Promise<Backlink[]>;
