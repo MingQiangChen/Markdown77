@@ -7,6 +7,8 @@ import {
   FolderPlus,
   FolderOpen,
   FilePlus2,
+  ChevronRight,
+  ChevronDown,
   Pencil,
   RefreshCcw,
   Save,
@@ -14,8 +16,15 @@ import {
   SplitSquareHorizontal,
   Trash2
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Backlink, SearchResult, VaultFile, VaultFolder, VaultInfo } from "./global";
+
+type TreeNode = {
+  path: string;
+  name: string;
+  type: "folder" | "file";
+  children: TreeNode[];
+};
 
 const md = new MarkdownIt({
   html: false,
@@ -92,6 +101,76 @@ function renderWikiLinks(markdownText: string) {
   return md.render(escaped);
 }
 
+function buildFileTree(files: VaultFile[], folders: VaultFolder[]) {
+  const root: TreeNode = {
+    path: "",
+    name: "",
+    type: "folder",
+    children: []
+  };
+  const folderMap = new Map<string, TreeNode>([["", root]]);
+
+  function ensureFolder(folderPath: string) {
+    if (folderMap.has(folderPath)) {
+      return folderMap.get(folderPath)!;
+    }
+
+    const parts = folderPath.split("/").filter(Boolean);
+    let current = root;
+    let currentPath = "";
+
+    for (const part of parts) {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      let next = folderMap.get(currentPath);
+
+      if (!next) {
+        next = {
+          path: currentPath,
+          name: part,
+          type: "folder",
+          children: []
+        };
+        folderMap.set(currentPath, next);
+        current.children.push(next);
+      }
+
+      current = next;
+    }
+
+    return current;
+  }
+
+  folders.forEach((folder) => ensureFolder(folder.path.replace(/\\/g, "/")));
+
+  files.forEach((file) => {
+    const normalizedPath = file.path.replace(/\\/g, "/");
+    const parts = normalizedPath.split("/");
+    const fileName = parts.pop() ?? file.name;
+    const parent = ensureFolder(parts.join("/"));
+
+    parent.children.push({
+      path: normalizedPath,
+      name: fileName,
+      type: "file",
+      children: []
+    });
+  });
+
+  function sortTree(node: TreeNode) {
+    node.children.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "folder" ? -1 : 1;
+      }
+
+      return a.name.localeCompare(b.name, "zh-CN");
+    });
+    node.children.forEach(sortTree);
+  }
+
+  sortTree(root);
+  return root.children;
+}
+
 export function App() {
   const [vault, setVault] = useState<VaultInfo | null>(null);
   const [files, setFiles] = useState<VaultFile[]>(demoFiles);
@@ -102,6 +181,7 @@ export function App() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [backlinks, setBacklinks] = useState<Backlink[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [saveState, setSaveState] = useState("演示模式");
   const [error, setError] = useState<string | null>(null);
   const activeFileRef = useRef(activeFile);
@@ -111,14 +191,28 @@ export function App() {
 
   const normalizedQuery = query.trim();
   const rendered = useMemo(() => renderWikiLinks(content), [content]);
-  const visibleFiles = normalizedQuery
-    ? files.filter((file) => file.path.toLowerCase().includes(normalizedQuery.toLowerCase()))
-    : files;
-  const visibleFolders = normalizedQuery
-    ? folders.filter((folder) =>
-        folder.path.toLowerCase().includes(normalizedQuery.toLowerCase())
-      )
-    : folders;
+  const visibleFiles = useMemo(
+    () =>
+      normalizedQuery
+        ? files.filter((file) =>
+            file.path.toLowerCase().includes(normalizedQuery.toLowerCase())
+          )
+        : files,
+    [files, normalizedQuery]
+  );
+  const visibleFolders = useMemo(
+    () =>
+      normalizedQuery
+        ? folders.filter((folder) =>
+            folder.path.toLowerCase().includes(normalizedQuery.toLowerCase())
+          )
+        : folders,
+    [folders, normalizedQuery]
+  );
+  const fileTree = useMemo(
+    () => buildFileTree(visibleFiles, visibleFolders),
+    [visibleFiles, visibleFolders]
+  );
   const canUseFileSystem = Boolean(window.markdown77);
 
   async function persistContent(filePath = activeFileRef.current, text = contentRef.current) {
@@ -165,6 +259,7 @@ export function App() {
     setVault(nextVault);
     setFiles(nextVault.files);
     setFolders(nextVault.folders);
+    setExpandedFolders(new Set(nextVault.folders.map((folder) => folder.path)));
     setSaveState("Vault 已打开");
 
     if (nextVault.files[0]) {
@@ -183,6 +278,65 @@ export function App() {
     const contents = await window.markdown77.listFiles(vault.path);
     setFiles(contents.files);
     setFolders(contents.folders);
+  }
+
+  function toggleFolder(folderPath: string) {
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+
+      if (next.has(folderPath)) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+
+      return next;
+    });
+  }
+
+  function renderTree(nodes: TreeNode[], depth = 0): ReactNode {
+    return nodes.map((node) => {
+      const indent = depth * 14;
+
+      if (node.type === "folder") {
+        const isExpanded = expandedFolders.has(node.path);
+
+        return (
+          <div className="tree-node" key={node.path}>
+            <button
+              className="tree-folder"
+              style={{ paddingLeft: 8 + indent }}
+              type="button"
+              onClick={() => toggleFolder(node.path)}
+            >
+              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <FolderOpen size={15} />
+              <span>{node.name}</span>
+            </button>
+            {isExpanded && node.children.length > 0 && renderTree(node.children, depth + 1)}
+          </div>
+        );
+      }
+
+      return (
+        <button
+          className={node.path === activeFile ? "tree-file active" : "tree-file"}
+          key={node.path}
+          style={{ paddingLeft: 22 + indent }}
+          type="button"
+          onClick={() => {
+            if (vault) {
+              void openFile(vault, node.path);
+            } else {
+              setActiveFile(node.path);
+            }
+          }}
+        >
+          <FileText size={16} />
+          <span>{node.name}</span>
+        </button>
+      );
+    });
   }
 
   async function refreshBacklinks(nextVault = vault, filePath = activeFile) {
@@ -487,17 +641,6 @@ export function App() {
             </div>
           </div>
 
-          {vault && visibleFolders.length > 0 && (
-            <div className="folder-list" aria-label="Vault folders">
-              {visibleFolders.map((folder) => (
-                <div className="folder-item" key={folder.path}>
-                  <FolderOpen size={15} />
-                  <span>{folder.path}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
           {vault && normalizedQuery && (
             <section className="search-results" aria-label="Search results">
               <div className="section-title">
@@ -525,24 +668,8 @@ export function App() {
             </section>
           )}
 
-          <nav className="file-list" aria-label="Vault files">
-            {visibleFiles.map((file) => (
-              <button
-                className={file.path === activeFile ? "file-item active" : "file-item"}
-                key={file.path}
-                type="button"
-                onClick={() => {
-                  if (vault) {
-                    void openFile(vault, file.path);
-                  } else {
-                    setActiveFile(file.path);
-                  }
-                }}
-              >
-                <FileText size={16} />
-                <span>{file.path}</span>
-              </button>
-            ))}
+          <nav className="file-tree" aria-label="Vault files">
+            {fileTree.length > 0 ? renderTree(fileTree) : <p className="empty-hint">没有文件。</p>}
           </nav>
 
           {!canUseFileSystem && (

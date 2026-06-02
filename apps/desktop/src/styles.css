@@ -157,21 +157,12 @@ button:disabled {
   background: #eef2f5;
 }
 
-.file-list {
+.file-tree {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-top: 10px;
   overflow: auto;
-}
-
-.folder-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: 10px;
-  border-bottom: 1px solid #edf0f3;
-  padding-bottom: 10px;
 }
 
 .search-results {
@@ -235,41 +226,46 @@ button:disabled {
   font-size: 12px;
 }
 
-.folder-item,
-.file-item {
+.tree-node {
+  display: contents;
+}
+
+.tree-folder,
+.tree-file {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 34px;
+  width: 100%;
+  border: 0;
   border-radius: 6px;
   padding: 7px 8px;
-}
-
-.folder-item {
-  color: #67717f;
-  font-size: 13px;
-}
-
-.file-item {
-  border: 0;
   background: transparent;
-  color: #39414d;
   text-align: left;
   cursor: pointer;
 }
 
-.folder-item span,
-.file-item span {
+.tree-folder {
+  color: #67717f;
+}
+
+.tree-file {
+  color: #39414d;
+}
+
+.tree-folder span,
+.tree-file span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.file-item:hover {
+.tree-folder:hover,
+.tree-file:hover {
   background: #eef2f5;
 }
 
-.file-item.active {
+.tree-file.active {
   background: #dcefeb;
   color: #124a45;
 }
