@@ -496,6 +496,8 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  overflow-x: auto;
+  max-width: 72vw;
 }
 
 .icon-button {
@@ -509,6 +511,7 @@ button:disabled {
   background: #ffffff;
   color: #39414d;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .icon-button:hover {
@@ -643,6 +646,55 @@ button:disabled {
   font-weight: 700;
 }
 
+.drawing-panel {
+  position: absolute;
+  z-index: 6;
+  top: 56px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  grid-template-rows: 52px minmax(0, 1fr);
+  border-top: 1px solid #d9dde3;
+  background: #fbfcfd;
+}
+
+.drawing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #d9dde3;
+  padding: 0 16px;
+  background: #ffffff;
+}
+
+.drawing-header .label {
+  display: block;
+  color: #67717f;
+  font-size: 12px;
+}
+
+.drawing-header strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.drawing-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawing-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #ffffff;
+  cursor: crosshair;
+  touch-action: none;
+}
+
 .split-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -692,6 +744,76 @@ button:disabled {
   background: #e9edf1;
   font-family:
     "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.preview img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+.chart-block {
+  margin: 18px 0;
+  border: 1px solid #d8dee5;
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.chart-block figcaption {
+  margin-bottom: 12px;
+  color: #20242a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chart-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: minmax(64px, 110px) minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.chart-row span,
+.chart-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-track {
+  overflow: hidden;
+  height: 12px;
+  border-radius: 999px;
+  background: #e9edf1;
+}
+
+.chart-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #1f6f68;
+}
+
+.media-embed {
+  display: block;
+  max-width: 100%;
+  margin: 14px 0;
+  border: 1px solid #d8dee5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+video.media-embed {
+  width: min(100%, 720px);
+}
+
+audio.media-embed {
+  width: min(100%, 520px);
 }
 
 .preview .wiki-link {

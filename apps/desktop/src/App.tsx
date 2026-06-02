@@ -3,12 +3,15 @@ import CodeMirror, { type EditorView } from "@uiw/react-codemirror";
 import MarkdownIt from "markdown-it";
 import {
   AlertCircle,
+  BarChart3,
   CalendarDays,
   FileText,
   FolderPlus,
   FolderOpen,
   FilePlus2,
+  ImagePlus,
   Network,
+  PenLine,
   ChevronRight,
   ChevronDown,
   ListTree,
@@ -70,6 +73,123 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true
 });
+
+type ChartDatum = {
+  label: string;
+  value: number;
+};
+
+type ChartDefinition = {
+  title: string;
+  data: ChartDatum[];
+};
+
+const defaultFenceRenderer =
+  md.renderer.rules.fence ??
+  ((tokens, index, options, _env, self) => self.renderToken(tokens, index, options));
+const defaultImageRenderer =
+  md.renderer.rules.image ??
+  ((tokens, index, options, _env, self) => self.renderToken(tokens, index, options));
+
+function parseChartDefinition(value: string): ChartDefinition | null {
+  const lines = value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  let title = "图表";
+  const data: ChartDatum[] = [];
+
+  for (const line of lines) {
+    const [rawKey, rawValue] = line.split(":");
+
+    if (!rawKey || rawValue === undefined) {
+      continue;
+    }
+
+    const key = rawKey.trim();
+    const parsedValue = Number(rawValue.trim());
+
+    if (key.toLowerCase() === "title") {
+      title = rawValue.trim() || title;
+      continue;
+    }
+
+    if (Number.isFinite(parsedValue)) {
+      data.push({
+        label: key,
+        value: parsedValue
+      });
+    }
+  }
+
+  if (data.length === 0) {
+    return null;
+  }
+
+  return { title, data };
+}
+
+function renderChartHtml(chart: ChartDefinition) {
+  const maxValue = Math.max(...chart.data.map((item) => item.value), 1);
+
+  return `<figure class="chart-block"><figcaption>${escapeHtml(
+    chart.title
+  )}</figcaption><div class="chart-bars">${chart.data
+    .map((item) => {
+      const percent = Math.max(4, (item.value / maxValue) * 100);
+
+      return `<div class="chart-row"><span>${escapeHtml(
+        item.label
+      )}</span><div class="chart-track"><div class="chart-fill" style="width:${percent}%"></div></div><strong>${escapeHtml(
+        String(item.value)
+      )}</strong></div>`;
+    })
+    .join("")}</div></figure>`;
+}
+
+function isMediaSource(src: string, extensions: string[]) {
+  const normalized = src.split("?")[0].toLowerCase();
+  return extensions.some((extension) => normalized.endsWith(extension));
+}
+
+md.renderer.rules.fence = (tokens, index, options, env, self) => {
+  const token = tokens[index];
+
+  if (token.info.trim().toLowerCase() === "chart") {
+    const chart = parseChartDefinition(token.content);
+
+    if (chart) {
+      return renderChartHtml(chart);
+    }
+  }
+
+  return defaultFenceRenderer(tokens, index, options, env, self);
+};
+
+md.renderer.rules.image = (tokens, index, options, env, self) => {
+  const token = tokens[index];
+  const src = token.attrGet("src") ?? "";
+  const alt = token.content || "媒体";
+
+  if (isMediaSource(src, [".mp4", ".webm", ".mov", ".ogg"])) {
+    return `<video class="media-embed" controls src="${escapeHtml(src)}">${escapeHtml(
+      alt
+    )}</video>`;
+  }
+
+  if (isMediaSource(src, [".mp3", ".wav", ".m4a", ".aac", ".flac"])) {
+    return `<audio class="media-embed" controls src="${escapeHtml(src)}">${escapeHtml(
+      alt
+    )}</audio>`;
+  }
+
+  return defaultImageRenderer(tokens, index, options, env, self);
+};
 
 const initialContent = `---
 title: Markdown77
@@ -444,11 +564,13 @@ export function App() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] });
   const [isGraphOpen, setIsGraphOpen] = useState(false);
+  const [isDrawingOpen, setIsDrawingOpen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [saveState, setSaveState] = useState("演示模式");
   const [error, setError] = useState<string | null>(null);
   const activeFileRef = useRef(activeFile);
   const contentRef = useRef(content);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const lastSavedContentRef = useRef(content);
   const isLoadingFileRef = useRef(false);
@@ -820,6 +942,113 @@ export function App() {
     setSaveState("已创建链接笔记");
   }
 
+  function insertMarkdownSnippet(snippet: string) {
+    const view = editorViewRef.current;
+
+    if (view) {
+      const selection = view.state.selection.main;
+      view.dispatch({
+        changes: {
+          from: selection.from,
+          to: selection.to,
+          insert: snippet
+        },
+        selection: {
+          anchor: selection.from + snippet.length
+        },
+        scrollIntoView: true
+      });
+      view.focus();
+      return;
+    }
+
+    setContent((current) => `${current}\n${snippet}`);
+  }
+
+  function insertChartTemplate() {
+    insertMarkdownSnippet(
+      "\n```chart\ntitle: 示例图表\n计划: 40\n进行中: 25\n完成: 60\n```\n"
+    );
+  }
+
+  function insertMediaLink() {
+    const mediaPath = window.prompt("图片、音频或视频路径/链接", "assets/example.png");
+
+    if (!mediaPath) {
+      return;
+    }
+
+    insertMarkdownSnippet(`\n![媒体](${mediaPath})\n`);
+  }
+
+  function clearDrawingCanvas() {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+
+    if (!canvas || !context) {
+      return;
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function startDrawing(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = event.currentTarget;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+
+    // Pointer events cover mouse, stylus and tablet touch input with one path.
+    canvas.setPointerCapture(event.pointerId);
+    context.beginPath();
+    context.moveTo(x, y);
+  }
+
+  function drawStroke(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (event.buttons === 0) {
+      return;
+    }
+
+    const canvas = event.currentTarget;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+
+    context.lineWidth = event.pointerType === "pen" ? 3 : 4;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.strokeStyle = "#1f6f68";
+    context.lineTo(x, y);
+    context.stroke();
+  }
+
+  function insertDrawing() {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const dataUrl = canvas.toDataURL("image/png");
+
+    // MVP stores annotations inline so they sync with the Markdown file itself.
+    insertMarkdownSnippet(`\n![手写绘图标注](${dataUrl})\n`);
+    setIsDrawingOpen(false);
+  }
+
   function jumpToOutlineItem(item: OutlineItem) {
     const view = editorViewRef.current;
 
@@ -838,6 +1067,12 @@ export function App() {
   useEffect(() => {
     activeFileRef.current = activeFile;
   }, [activeFile]);
+
+  useEffect(() => {
+    if (isDrawingOpen) {
+      window.setTimeout(clearDrawingCanvas, 0);
+    }
+  }, [isDrawingOpen]);
 
   useEffect(() => {
     if (!window.markdown77) {
@@ -1098,6 +1333,18 @@ export function App() {
                   <span>图谱</span>
                 </button>
               )}
+              <button className="icon-button" type="button" onClick={insertChartTemplate}>
+                <BarChart3 size={16} />
+                <span>图表</span>
+              </button>
+              <button className="icon-button" type="button" onClick={insertMediaLink}>
+                <ImagePlus size={16} />
+                <span>媒体</span>
+              </button>
+              <button className="icon-button" type="button" onClick={() => setIsDrawingOpen(true)}>
+                <PenLine size={16} />
+                <span>绘图</span>
+              </button>
               {vault && activeFile && (
                 <button className="icon-button primary" type="button" onClick={saveFile}>
                   <Save size={16} />
@@ -1195,6 +1442,43 @@ export function App() {
               ) : (
                 <p className="empty-hint">当前 Vault 还没有可显示的 Markdown 笔记。</p>
               )}
+            </section>
+          )}
+
+          {isDrawingOpen && (
+            <section className="drawing-panel" aria-label="Drawing annotation">
+              <div className="drawing-header">
+                <div>
+                  <span className="label">手写绘图标注</span>
+                  <strong>支持鼠标、触控和手写笔</strong>
+                </div>
+                <div className="drawing-actions">
+                  <button className="icon-button" type="button" onClick={clearDrawingCanvas}>
+                    清空
+                  </button>
+                  <button className="icon-button primary" type="button" onClick={insertDrawing}>
+                    插入
+                  </button>
+                  <button
+                    className="clear-filter-button"
+                    type="button"
+                    onClick={() => setIsDrawingOpen(false)}
+                    title="关闭绘图"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+              <canvas
+                className="drawing-canvas"
+                ref={(canvas) => {
+                  canvasRef.current = canvas;
+                }}
+                width={1200}
+                height={720}
+                onPointerDown={startDrawing}
+                onPointerMove={drawStroke}
+              />
             </section>
           )}
 
