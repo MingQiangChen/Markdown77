@@ -1,0 +1,14 @@
+{
+  "name": "markdown77",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-platform Markdown knowledge base editor.",
+  "scripts": {
+    "dev": "npm --workspace apps/desktop run dev",
+    "build": "npm --workspace apps/desktop run build",
+    "typecheck": "npm --workspace apps/desktop run typecheck"
+  },
+  "workspaces": [
+    "apps/*"
+  ]
+}
