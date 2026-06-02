@@ -15,7 +15,7 @@ import {
   Trash2
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { SearchResult, VaultFile, VaultFolder, VaultInfo } from "./global";
+import type { Backlink, SearchResult, VaultFile, VaultFolder, VaultInfo } from "./global";
 
 const md = new MarkdownIt({
   html: false,
@@ -101,6 +101,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [backlinks, setBacklinks] = useState<Backlink[]>([]);
   const [saveState, setSaveState] = useState("演示模式");
   const [error, setError] = useState<string | null>(null);
 
@@ -152,6 +153,16 @@ export function App() {
     setFolders(contents.folders);
   }
 
+  async function refreshBacklinks(nextVault = vault, filePath = activeFile) {
+    if (!nextVault || !filePath || !window.markdown77) {
+      setBacklinks([]);
+      return;
+    }
+
+    const nextBacklinks = await window.markdown77.getBacklinks(nextVault.path, filePath);
+    setBacklinks(nextBacklinks);
+  }
+
   async function openFile(nextVault: VaultInfo, filePath: string) {
     if (!window.markdown77) {
       setActiveFile(filePath);
@@ -163,6 +174,7 @@ export function App() {
     setActiveFile(filePath);
     setContent(text);
     setSaveState("已加载");
+    await refreshBacklinks(nextVault, filePath);
   }
 
   async function saveFile() {
@@ -175,6 +187,7 @@ export function App() {
     await window.markdown77.writeFile(vault.path, activeFile, content);
     setSaveState("已保存");
     await refreshFiles();
+    await refreshBacklinks(vault, activeFile);
   }
 
   async function createNote() {
@@ -264,6 +277,7 @@ export function App() {
       } else {
         setActiveFile("");
         setContent("# 空 Vault\n\n这个 Vault 里还没有 Markdown 文件。");
+        setBacklinks([]);
         setSaveState("已删除");
       }
     } catch (deleteError) {
@@ -541,6 +555,36 @@ export function App() {
               dangerouslySetInnerHTML={{ __html: rendered }}
             />
           </div>
+
+          {vault && activeFile && (
+            <section className="backlinks-panel">
+              <div className="section-title">
+                <span>反向链接</span>
+                <small>{backlinks.length} 个来源</small>
+              </div>
+              {backlinks.length > 0 ? (
+                <div className="backlinks-list">
+                  {backlinks.map((backlink) => (
+                    <button
+                      className="backlink-item"
+                      key={backlink.sourcePath}
+                      type="button"
+                      onClick={() => {
+                        if (vault) {
+                          void openFile(vault, backlink.sourcePath);
+                        }
+                      }}
+                    >
+                      <strong>{backlink.sourcePath}</strong>
+                      <span>{backlink.snippet}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-hint">还没有其他笔记链接到当前笔记。</p>
+              )}
+            </section>
+          )}
         </section>
       </main>
 

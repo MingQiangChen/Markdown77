@@ -21,6 +21,12 @@ export type SearchResult = {
   matchType: "filename" | "content";
 };
 
+export type Backlink = {
+  sourcePath: string;
+  label: string;
+  snippet: string;
+};
+
 export type VaultInfo = {
   path: string;
   name: string;
@@ -34,6 +40,7 @@ declare global {
       openVault: () => Promise<VaultInfo | null>;
       listFiles: (vaultPath: string) => Promise<VaultContents>;
       search: (vaultPath: string, query: string) => Promise<SearchResult[]>;
+      getBacklinks: (vaultPath: string, relativePath: string) => Promise<Backlink[]>;
       readFile: (vaultPath: string, relativePath: string) => Promise<string>;
       writeFile: (
         vaultPath: string,

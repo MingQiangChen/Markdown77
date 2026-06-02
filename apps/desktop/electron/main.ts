@@ -20,6 +20,12 @@ type SearchResult = {
   matchType: "filename" | "content";
 };
 
+type Backlink = {
+  sourcePath: string;
+  label: string;
+  snippet: string;
+};
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {
@@ -149,6 +155,24 @@ function createSnippet(content: string, query: string) {
   return `${prefix}${normalizedContent.slice(start, end)}${suffix}`;
 }
 
+function normalizeLinkTarget(target: string) {
+  return normalizeMarkdownPath(target.split("|")[0] ?? "")
+    .replace(/\\/g, "/")
+    .toLowerCase();
+}
+
+function getBacklinkCandidates(relativePath: string) {
+  const normalizedPath = relativePath.replace(/\\/g, "/").toLowerCase();
+  const parsed = path.parse(normalizedPath);
+
+  return new Set([
+    normalizedPath,
+    normalizedPath.replace(/\.md$/i, ""),
+    `${parsed.name}.md`,
+    parsed.name
+  ]);
+}
+
 ipcMain.handle("vault:open", async () => {
   const options: OpenDialogOptions = {
     title: "打开 Vault 文件夹",
@@ -206,6 +230,40 @@ ipcMain.handle("vault:search", async (_event, vaultPath: string, query: string) 
   }
 
   return results.slice(0, 100);
+});
+
+ipcMain.handle("vault:getBacklinks", async (_event, vaultPath: string, relativePath: string) => {
+  const candidates = getBacklinkCandidates(relativePath);
+  const { files } = await walkVault(vaultPath);
+  const backlinks: Backlink[] = [];
+
+  for (const file of files) {
+    if (file.path === relativePath) {
+      continue;
+    }
+
+    const filePath = resolveVaultPath(vaultPath, file.path);
+    const content = await fs.readFile(filePath, "utf8");
+    const matches = content.matchAll(/\[\[([^\]]+)\]\]/g);
+
+    for (const match of matches) {
+      const rawLink = match[1] ?? "";
+      const normalizedTarget = normalizeLinkTarget(rawLink);
+
+      if (!candidates.has(normalizedTarget)) {
+        continue;
+      }
+
+      backlinks.push({
+        sourcePath: file.path,
+        label: rawLink.split("|")[1]?.trim() || rawLink.split("|")[0]?.trim() || relativePath,
+        snippet: createSnippet(content, match[0])
+      });
+      break;
+    }
+  }
+
+  return backlinks.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath, "zh-CN"));
 });
 
 ipcMain.handle("vault:readFile", async (_event, vaultPath: string, relativePath: string) => {
