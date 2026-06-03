@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld("markdown77", {
+const markdown77Api = {
   openVault: () => ipcRenderer.invoke("vault:open"),
   getLastVault: () => ipcRenderer.invoke("settings:getLastVault"),
   setLastVault: (vaultPath: string | null) =>
@@ -28,4 +28,11 @@ contextBridge.exposeInMainWorld("markdown77", {
     ipcRenderer.invoke("vault:renameFile", vaultPath, currentRelativePath, nextRelativePath),
   deleteFile: (vaultPath: string, relativePath: string) =>
     ipcRenderer.invoke("vault:deleteFile", vaultPath, relativePath)
-});
+};
+
+try {
+  contextBridge.exposeInMainWorld("markdown77", markdown77Api);
+} catch {
+  (globalThis as typeof globalThis & { markdown77?: typeof markdown77Api }).markdown77 =
+    markdown77Api;
+}
