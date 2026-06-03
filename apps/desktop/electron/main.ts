@@ -93,7 +93,7 @@ function createWindow() {
     title: "Markdown77",
     webPreferences: {
       preload: preloadPath,
-      contextIsolation: true,
+      contextIsolation: false,
       nodeIntegration: false,
       sandbox: false
     }
