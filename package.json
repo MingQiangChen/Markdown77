@@ -8,9 +8,13 @@
     "dev:web": "npm --workspace apps/desktop run dev:web",
     "build": "npm --workspace apps/desktop run build",
     "package:mac": "bash scripts/package-mac.sh",
+    "package:cross": "node scripts/package-platform.mjs",
     "typecheck": "npm --workspace apps/desktop run typecheck"
   },
   "workspaces": [
     "apps/*"
-  ]
+  ],
+  "devDependencies": {
+    "@electron/packager": "^20.0.0"
+  }
 }
