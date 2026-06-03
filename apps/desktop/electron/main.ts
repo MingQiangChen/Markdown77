@@ -94,7 +94,7 @@ function createWindow() {
     webPreferences: {
       preload: preloadPath,
       contextIsolation: false,
-      nodeIntegration: false,
+      nodeIntegration: true,
       sandbox: false
     }
   });

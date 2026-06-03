@@ -29,11 +29,15 @@ import type {
   Backlink,
   GraphData,
   SearchResult,
+  SavedAsset,
   TagIndexEntry,
+  VaultContents,
   VaultFile,
   VaultFolder,
   VaultInfo
 } from "./global";
+
+type Markdown77Api = NonNullable<Window["markdown77"]>;
 
 type TreeNode = {
   path: string;
@@ -264,6 +268,68 @@ function renderWikiLinks(markdownText: string) {
   });
 
   return md.render(escaped);
+}
+
+function createIpcMarkdown77Api(): Markdown77Api | null {
+  try {
+    const electron = window.require?.("electron");
+    const ipcRenderer = electron?.ipcRenderer;
+
+    if (!ipcRenderer) {
+      return null;
+    }
+
+    return {
+      openVault: () => ipcRenderer.invoke("vault:open") as Promise<VaultInfo | null>,
+      getLastVault: () =>
+        ipcRenderer.invoke("settings:getLastVault") as Promise<VaultInfo | null>,
+      setLastVault: (vaultPath: string | null) =>
+        ipcRenderer.invoke("settings:setLastVault", vaultPath) as Promise<boolean>,
+      setLastFile: (filePath: string | null) =>
+        ipcRenderer.invoke("settings:setLastFile", filePath) as Promise<boolean>,
+      listFiles: (vaultPath: string) =>
+        ipcRenderer.invoke("vault:listFiles", vaultPath) as Promise<VaultContents>,
+      search: (vaultPath: string, query: string) =>
+        ipcRenderer.invoke("vault:search", vaultPath, query) as Promise<SearchResult[]>,
+      getBacklinks: (vaultPath: string, relativePath: string) =>
+        ipcRenderer.invoke("vault:getBacklinks", vaultPath, relativePath) as Promise<Backlink[]>,
+      getTags: (vaultPath: string) =>
+        ipcRenderer.invoke("vault:getTags", vaultPath) as Promise<TagIndexEntry[]>,
+      getGraph: (vaultPath: string) =>
+        ipcRenderer.invoke("vault:getGraph", vaultPath) as Promise<GraphData>,
+      readFile: (vaultPath: string, relativePath: string) =>
+        ipcRenderer.invoke("vault:readFile", vaultPath, relativePath) as Promise<string>,
+      writeFile: (vaultPath: string, relativePath: string, content: string) =>
+        ipcRenderer.invoke("vault:writeFile", vaultPath, relativePath, content) as Promise<boolean>,
+      createFile: (vaultPath: string, preferredRelativePath: string, content: string) =>
+        ipcRenderer.invoke(
+          "vault:createFile",
+          vaultPath,
+          preferredRelativePath,
+          content
+        ) as Promise<VaultFile>,
+      saveDrawing: (vaultPath: string, preferredName: string, dataUrl: string) =>
+        ipcRenderer.invoke(
+          "vault:saveDrawing",
+          vaultPath,
+          preferredName,
+          dataUrl
+        ) as Promise<SavedAsset>,
+      createFolder: (vaultPath: string, folderName: string) =>
+        ipcRenderer.invoke("vault:createFolder", vaultPath, folderName) as Promise<VaultFolder>,
+      renameFile: (vaultPath: string, currentRelativePath: string, nextRelativePath: string) =>
+        ipcRenderer.invoke(
+          "vault:renameFile",
+          vaultPath,
+          currentRelativePath,
+          nextRelativePath
+        ) as Promise<VaultFile>,
+      deleteFile: (vaultPath: string, relativePath: string) =>
+        ipcRenderer.invoke("vault:deleteFile", vaultPath, relativePath) as Promise<boolean>
+    };
+  } catch {
+    return null;
+  }
 }
 
 function splitFrontmatter(markdownText: string) {
@@ -607,16 +673,17 @@ export function App() {
     [activeTag, tagIndex]
   );
   const graphLayout = useMemo(() => buildGraphLayout(graph, activeFile), [graph, activeFile]);
-  const canUseFileSystem = Boolean(window.markdown77);
+  const markdown77 = useMemo(() => window.markdown77 ?? createIpcMarkdown77Api(), []);
+  const canUseFileSystem = Boolean(markdown77);
 
   async function persistContent(filePath = activeFileRef.current, text = contentRef.current) {
-    if (!vault || !filePath || !window.markdown77) {
+    if (!vault || !filePath || !markdown77) {
       return false;
     }
 
     setError(null);
     setSaveState("保存中");
-    await window.markdown77.writeFile(vault.path, filePath, text);
+    await markdown77.writeFile(vault.path, filePath, text);
     lastSavedContentRef.current = text;
     setSaveState("已自动保存");
     await refreshFiles();
@@ -625,7 +692,7 @@ export function App() {
   }
 
   async function saveIfDirty() {
-    if (!vault || !activeFileRef.current || !window.markdown77) {
+    if (!vault || !activeFileRef.current || !markdown77) {
       return;
     }
 
@@ -660,14 +727,14 @@ export function App() {
   }
 
   async function openVault() {
-    if (!window.markdown77) {
+    if (!markdown77) {
       setError("请在 Electron 桌面壳中打开 Vault。");
       return;
     }
 
     setError(null);
     await saveIfDirty();
-    const nextVault = await window.markdown77.openVault();
+    const nextVault = await markdown77.openVault();
 
     if (!nextVault) {
       return;
@@ -677,11 +744,11 @@ export function App() {
   }
 
   async function refreshFiles() {
-    if (!vault || !window.markdown77) {
+    if (!vault || !markdown77) {
       return;
     }
 
-    const contents = await window.markdown77.listFiles(vault.path);
+    const contents = await markdown77.listFiles(vault.path);
     setFiles(contents.files);
     setFolders(contents.folders);
     await refreshTags(vault);
@@ -748,22 +815,22 @@ export function App() {
   }
 
   async function refreshBacklinks(nextVault = vault, filePath = activeFile) {
-    if (!nextVault || !filePath || !window.markdown77) {
+    if (!nextVault || !filePath || !markdown77) {
       setBacklinks([]);
       return;
     }
 
-    const nextBacklinks = await window.markdown77.getBacklinks(nextVault.path, filePath);
+    const nextBacklinks = await markdown77.getBacklinks(nextVault.path, filePath);
     setBacklinks(nextBacklinks);
   }
 
   async function refreshTags(nextVault = vault) {
-    if (!nextVault || !window.markdown77) {
+    if (!nextVault || !markdown77) {
       setTagIndex([]);
       return;
     }
 
-    const nextTags = await window.markdown77.getTags(nextVault.path);
+    const nextTags = await markdown77.getTags(nextVault.path);
     setTagIndex(nextTags);
     setActiveTag((currentTag) =>
       currentTag && nextTags.some((entry) => entry.tag === currentTag) ? currentTag : null
@@ -771,17 +838,17 @@ export function App() {
   }
 
   async function refreshGraph(nextVault = vault) {
-    if (!nextVault || !window.markdown77) {
+    if (!nextVault || !markdown77) {
       setGraph({ nodes: [], edges: [] });
       return;
     }
 
-    const nextGraph = await window.markdown77.getGraph(nextVault.path);
+    const nextGraph = await markdown77.getGraph(nextVault.path);
     setGraph(nextGraph);
   }
 
   async function openFile(nextVault: VaultInfo, filePath: string) {
-    if (!window.markdown77) {
+    if (!markdown77) {
       setActiveFile(filePath);
       return;
     }
@@ -789,13 +856,13 @@ export function App() {
     setError(null);
     await saveIfDirty();
     isLoadingFileRef.current = true;
-    const text = await window.markdown77.readFile(nextVault.path, filePath);
+    const text = await markdown77.readFile(nextVault.path, filePath);
     setActiveFile(filePath);
     setContent(text);
     activeFileRef.current = filePath;
     contentRef.current = text;
     lastSavedContentRef.current = text;
-    await window.markdown77.setLastFile(filePath);
+    await markdown77.setLastFile(filePath);
     setSaveState("已加载");
     await refreshBacklinks(nextVault, filePath);
     window.setTimeout(() => {
@@ -804,7 +871,7 @@ export function App() {
   }
 
   async function saveFile() {
-    if (!vault || !activeFile || !window.markdown77) {
+    if (!vault || !activeFile || !markdown77) {
       return;
     }
 
@@ -814,7 +881,7 @@ export function App() {
   }
 
   async function createNote() {
-    if (!vault || !window.markdown77) {
+    if (!vault || !markdown77) {
       setError("请先打开一个 Vault。");
       return;
     }
@@ -827,7 +894,7 @@ export function App() {
 
     setError(null);
     const title = preferredPath.replace(/\.md$/i, "").split(/[\\/]/).pop() || "新笔记";
-    const newFile = await window.markdown77.createFile(
+    const newFile = await markdown77.createFile(
       vault.path,
       preferredPath,
       `---\ntitle: ${title}\ntags: []\ncreated: ${new Date().toISOString().slice(0, 10)}\n---\n\n# ${title}\n\n`
@@ -838,7 +905,7 @@ export function App() {
   }
 
   async function createFolder() {
-    if (!vault || !window.markdown77) {
+    if (!vault || !markdown77) {
       setError("请先打开一个 Vault。");
       return;
     }
@@ -850,13 +917,13 @@ export function App() {
     }
 
     setError(null);
-    await window.markdown77.createFolder(vault.path, folderName);
+    await markdown77.createFolder(vault.path, folderName);
     await refreshFiles();
     setSaveState("文件夹已创建");
   }
 
   async function renameActiveFile() {
-    if (!vault || !activeFile || !window.markdown77) {
+    if (!vault || !activeFile || !markdown77) {
       return;
     }
 
@@ -868,7 +935,7 @@ export function App() {
 
     try {
       setError(null);
-      const renamedFile = await window.markdown77.renameFile(vault.path, activeFile, nextPath);
+      const renamedFile = await markdown77.renameFile(vault.path, activeFile, nextPath);
       await refreshFiles();
       await openFile(vault, renamedFile.path);
       setSaveState("已重命名");
@@ -878,7 +945,7 @@ export function App() {
   }
 
   async function deleteActiveFile() {
-    if (!vault || !activeFile || !window.markdown77) {
+    if (!vault || !activeFile || !markdown77) {
       return;
     }
 
@@ -890,8 +957,8 @@ export function App() {
 
     try {
       setError(null);
-      await window.markdown77.deleteFile(vault.path, activeFile);
-      const contents = await window.markdown77.listFiles(vault.path);
+      await markdown77.deleteFile(vault.path, activeFile);
+      const contents = await markdown77.listFiles(vault.path);
       setFiles(contents.files);
       setFolders(contents.folders);
       await refreshTags(vault);
@@ -911,7 +978,7 @@ export function App() {
   }
 
   async function openWikiLink(target: string) {
-    if (!vault || !window.markdown77) {
+    if (!vault || !markdown77) {
       setError("请先打开一个 Vault。");
       return;
     }
@@ -932,7 +999,7 @@ export function App() {
     }
 
     const title = target.replace(/\.md$/i, "").split(/[\\/]/).pop() || "新笔记";
-    const newFile = await window.markdown77.createFile(
+    const newFile = await markdown77.createFile(
       vault.path,
       target,
       `---\ntitle: ${title}\ntags: []\ncreated: ${new Date().toISOString().slice(0, 10)}\n---\n\n# ${title}\n\n`
@@ -1044,9 +1111,9 @@ export function App() {
 
     const dataUrl = canvas.toDataURL("image/png");
 
-    if (vault && window.markdown77) {
+    if (vault && markdown77) {
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const asset = await window.markdown77.saveDrawing(
+      const asset = await markdown77.saveDrawing(
         vault.path,
         `drawing-${timestamp}`,
         dataUrl
@@ -1088,14 +1155,14 @@ export function App() {
   }, [isDrawingOpen]);
 
   useEffect(() => {
-    if (!window.markdown77) {
+    if (!markdown77) {
       return;
     }
 
     let isActive = true;
     setSaveState("正在恢复 Vault");
 
-    void window.markdown77
+    void markdown77
       .getLastVault()
       .then((lastVault) => {
         if (!isActive) {
@@ -1123,7 +1190,7 @@ export function App() {
   useEffect(() => {
     contentRef.current = content;
 
-    if (!vault || !activeFile || !window.markdown77) {
+    if (!vault || !activeFile || !markdown77) {
       return;
     }
 
@@ -1146,7 +1213,7 @@ export function App() {
   }, [content, activeFile, vault]);
 
   useEffect(() => {
-    if (!vault || !window.markdown77 || !normalizedQuery) {
+    if (!vault || !markdown77 || !normalizedQuery) {
       setSearchResults([]);
       setIsSearching(false);
       return;
@@ -1156,7 +1223,7 @@ export function App() {
     setIsSearching(true);
 
     const timeout = window.setTimeout(() => {
-      void window.markdown77
+      void markdown77
         ?.search(vault.path, normalizedQuery)
         .then((results) => {
           if (isActive) {

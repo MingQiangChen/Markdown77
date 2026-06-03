@@ -61,6 +61,11 @@ export type VaultInfo = {
 
 declare global {
   interface Window {
+    require?: (moduleName: "electron") => {
+      ipcRenderer: {
+        invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+      };
+    };
     markdown77?: {
       openVault: () => Promise<VaultInfo | null>;
       getLastVault: () => Promise<VaultInfo | null>;
